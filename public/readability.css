@@ -1,0 +1,79 @@
+/* Amanah Management - consistent readable type scale (desktop + mobile). */
+/* Applies only to the app UI. Printed consent forms use their existing fixed A4 typography. */
+:root{
+  --ui-body-readable:17.5px;
+  --ui-small-readable:14.5px;
+  --ui-label-readable:15px;
+}
+html, body{
+  font-size:var(--ui-body-readable);
+  line-height:1.65;
+}
+.main{font-size:17px;line-height:1.68}
+.main .top h2{font-size:24px;line-height:1.35}
+.main .top .sub{font-size:15px;line-height:1.65}
+.main .card .h3{font-size:18px;line-height:1.45}
+.main .stat .k{font-size:15px;line-height:1.5}
+.main .stat .v{font-size:31px;line-height:1.28}
+.main .stat .s{font-size:14.5px;line-height:1.6}
+.main .row .m{font-size:14.5px;line-height:1.6}
+.main .row .t{font-size:17px}
+.main .empty{font-size:16px;line-height:1.65}
+.main .empty b{font-size:17px}
+.main .pill{font-size:13.5px;line-height:1.5}
+.main .skip{font-size:14.5px;line-height:1.6}
+.main .review dt{font-size:15px}
+.main .steps div{font-size:14px;line-height:1.5}
+.main .steps div i{font-size:12px}
+.main .q .n{font-size:14px}
+.main .q .tx{font-size:16.5px;line-height:1.65}
+.main label, .modal label{font-size:15px;line-height:1.5}
+.main input,.main select,.main textarea,.modal input,.modal select,.modal textarea{font-size:16.5px}
+.main .btn,.modal .btn{font-size:16px;line-height:1.4}
+.main .btn.sm,.modal .btn.sm{font-size:14.5px}
+.main table.t{font-size:16px;line-height:1.55}
+.main table.t th{font-size:14.5px;line-height:1.45}
+.main table.t td{line-height:1.6}
+.main .cal .wd{font-size:14px}
+.main .cal .d{font-size:13.5px;line-height:1.45}
+.main .cal .d .hj{font-size:11.8px}
+.main .cal .d .sn{font-size:11.8px}
+.side .tag,.side .bot{font-size:14px}
+.side .nav a{font-size:17px}
+.tabs a{font-size:13px}
+#login .err{font-size:14.5px}
+#login p{font-size:16.5px}
+#login label{font-size:15px}
+#login input{font-size:16.5px}
+/* A handful of legacy inline styles use 12-13px labels. Keep them readable without touching print. */
+.main [style*="font-size:12px"],
+.main [style*="font-size:12.5px"],
+.main [style*="font-size:13px"],
+.main [style*="font-size:13.5px"]{font-size:14.5px!important;line-height:1.6}
+/* Pricing and notifications added after the original page use their own styles. */
+.main .price-note,.main .price-form label,.main .price-card .hint{font-size:14.5px;line-height:1.65}
+.main .price-card h3{font-size:18px}
+.main .price-form input{font-size:16.5px}
+#amanahNoticePanel .notice-copy{font-size:14.5px;line-height:1.6}
+#amanahNoticePanel time{font-size:12.5px}
+@media(max-width:860px){
+  html,body{font-size:17px}
+  .main{font-size:16.5px;line-height:1.65}
+  .main .top h2{font-size:22px}
+  .main .stat .v{font-size:29px}
+  .main .card .h3{font-size:17.5px}
+  .main .cal .d{font-size:13px}
+  .main table.t{font-size:15.5px}
+  .main table.t th{font-size:14px}
+  .tabs a{font-size:12.5px}
+}
+@media(max-width:390px){
+  .main .stat .k{font-size:14.5px}
+  .main .stat .s{font-size:14px}
+  .main .btn{font-size:15px;padding:8px 12px}
+  .main .btn.sm{font-size:14px}
+}
+@media print{
+  html,body{font-size:16.5px;line-height:1.55}
+  #printArea,.pf{font-size:12pt}
+}
