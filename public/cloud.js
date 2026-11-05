@@ -28,6 +28,7 @@ overlayStyle.textContent=[
 '#amanahNoticeActions button{cursor:pointer;border:1px solid #b8d6c3;border-radius:8px;background:#eaf5ec;color:#205d40;padding:8px 10px;font:700 12px/1.4 system-ui,sans-serif}',
 '#amanahNoticeLive{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}',
 '@media(max-width:700px){#amanahNoticeHub{top:max(9px,env(safe-area-inset-top));right:max(8px,env(safe-area-inset-right))}#amanahNoticeBell{width:42px;height:42px;border-radius:13px}#amanahNoticePanel{width:min(365px,calc(100vw - 16px));max-height:calc(100dvh - 135px)}}',
+'@media(min-width:861px){#amanahNoticeHub{position:relative;top:auto;right:auto;inset:auto;flex:0 0 auto}#amanahNoticePanel{right:auto;left:0}}',
 '@media print{#amanahNoticeHub{display:none!important}}'
 ].join('');
 document.head.appendChild(overlayStyle);
@@ -99,6 +100,35 @@ function badge(status,error,actions){
  if(error)live.textContent='নোটিফিকেশনে সতর্কতা এসেছে। নোটিফিকেশন বেল খুলে দেখুন।';
  drawNotices();
 }
+// Keep the desktop bell inside the normal header layout instead of floating over action buttons.
+// On mobile, return it to the document body and keep the existing fixed top-right position.
+const bellDesktopMedia=window.matchMedia('(min-width: 861px)');
+function placeNoticeBell(){
+ if(!Cloud.ready)return;
+ if(!bellDesktopMedia.matches){
+  if(hub.parentElement!==document.body)document.body.appendChild(hub);
+  return;
+ }
+ const header=document.querySelector('#main > .top');
+ const actions=header?.querySelector(':scope > .flex');
+ const slot=actions||header;
+ if(slot){
+  if(hub.parentElement!==slot || slot.firstElementChild!==hub){
+   slot.insertBefore(hub,slot.firstChild);
+  }
+ }else if(hub.parentElement!==document.body)document.body.appendChild(hub);
+}
+const renderBeforeNoticeBell=render;
+render=function(...args){
+ // Render replaces #main.innerHTML; first detach the bell so it survives route changes.
+ if(hub.parentElement!==document.body)document.body.appendChild(hub);
+ const result=renderBeforeNoticeBell.apply(this,args);
+ placeNoticeBell();
+ return result;
+};
+if(typeof bellDesktopMedia.addEventListener==='function')bellDesktopMedia.addEventListener('change',placeNoticeBell);
+else if(typeof bellDesktopMedia.addListener==='function')bellDesktopMedia.addListener(placeNoticeBell);
+
 function countLocal(d){return (d?.patients?.length||0)+(d?.visits?.length||0)+(d?.appts?.length||0)}
 function saveBackup(d,filename){
  const blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json;charset=utf-8'});
