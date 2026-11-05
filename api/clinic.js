@@ -2,8 +2,8 @@
 const crypto=require('node:crypto');
 const {get,put,BlobNotFoundError,BlobPreconditionFailedError}=require('@vercel/blob');
 const {json,sameOrigin,parseInput,authorized,configReady}=require('../lib/clinic-security');
-const PATH='amanah-clinic/v1/state.encrypted.json';
-const AAD=Buffer.from('amanah-clinic-v1');
+const PATH='amanah-clinic/v2/state.encrypted.json';
+const AAD=Buffer.from('amanah-clinic-v2');
 function key(){const raw=process.env.AMANAH_DATA_KEY||'';if(!/^[a-f0-9]{64}$/i.test(raw))throw Error('Data encryption key missing');return Buffer.from(raw,'hex')}
 function encrypt(d){
  const iv=crypto.randomBytes(12),cipher=crypto.createCipheriv('aes-256-gcm',key(),iv);cipher.setAAD(AAD);
@@ -50,8 +50,7 @@ module.exports=async function handler(req,res){
  const raw=JSON.stringify(body.state);
  if(Buffer.byteLength(raw,'utf8')>2000000)return json(res,413,{error:'Dataset exceeds 2 MB; export a backup and contact support'});
  try{
-  const before=await load();
-  if(before.revision!==body.revision)return json(res,409,{error:'Another device changed this data',code:'STALE_REVISION',revision:before.revision});
+  // Avoid stale CDN reads on writes: Blob's atomic ifMatch is the concurrency authority.
   const encrypted=encrypt(body.state);
   const opt={access:'private',contentType:'application/json',cacheControlMaxAge:60,addRandomSuffix:false};
   if(body.revision){opt.allowOverwrite=true;opt.ifMatch=body.revision}
@@ -59,7 +58,7 @@ module.exports=async function handler(req,res){
   // Immutable encrypted daily snapshot. A failed backup never rolls back the verified primary write.
   const day=new Date().toISOString().slice(0,10);
   try{
-   await put('amanah-clinic/v1/backups/'+day+'.encrypted.json',encrypted,{access:'private',contentType:'application/json',addRandomSuffix:false});
+   await put('amanah-clinic/v2/backups/'+day+'.encrypted.json',encrypted,{access:'private',contentType:'application/json',addRandomSuffix:false});
   }catch(e){if(!/already exists|blob already exists|409/i.test(String(e?.message)))console.warn('Daily backup unavailable',e?.name)}
   return json(res,200,{ok:true,revision:written.etag});
  }catch(e){
