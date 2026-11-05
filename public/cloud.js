@@ -119,7 +119,7 @@ async function cloudOpen(){
  Cloud.ready=true;Cloud.pending=null;Cloud.conflict=false;Cloud.lastError='';Cloud.lastWriteAt=Date.now();
  $('#login').hidden=true;$('#login').style.display='none';$('#shell').hidden=false;
  enter();
- badge('✓ Clean Cloud শুরু • রোগী ০ থেকে শুরু',false,{});
+ badge('✓ Private Cloud প্রস্তুত • '+bn(D.patients.length)+' জন রোগী',false,{});
  if(!window.__amanahCloudPolling){window.__amanahCloudPolling=setInterval(pollCloud,20000)}
 }
 $('#loginForm').onsubmit=async e=>{
