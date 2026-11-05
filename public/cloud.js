@@ -2,7 +2,7 @@
 (function(){
 'use strict';
 try{sessionStorage.removeItem('amanah_in')}catch(e){}
-const Cloud={ready:false,revision:null,pending:null,busy:false,conflict:false,lastError:'',timer:null};
+const Cloud={ready:false,revision:null,pending:null,busy:false,conflict:false,lastError:'',timer:null,lastWriteAt:0};
 const overlayStyle=document.createElement('style');
 overlayStyle.textContent='#amanahCloudBar{display:none;position:fixed;top:9px;right:12px;z-index:600;background:#fff;color:#23553c;border:1px solid #c9decf;box-shadow:0 3px 18px #071b102e;border-radius:12px;max-width:min(94vw,480px);padding:10px 13px;line-height:1.5;font:700 12px system-ui,"Noto Sans Bengali",sans-serif}#amanahCloudBar.show{display:block}#amanahCloudBar.error{border-color:#da6e55;background:#fff2ef;color:#7c362b}#amanahCloudBar button{cursor:pointer;background:#e6f3e9;border:1px solid #b6d6bd;border-radius:8px;padding:5px 7px;margin-left:6px;font-size:11px;color:#1d5939}#amanahCloudBar.error button{background:#fff}#amanahCloudBar .actions{display:flex;flex-wrap:wrap;gap:4px;margin-top:7px}@media(max-width:700px){#amanahCloudBar{top:auto;bottom:72px;right:8px;left:8px;max-width:none}}@media print{#amanahCloudBar{display:none!important}}';
 document.head.appendChild(overlayStyle);
@@ -41,6 +41,7 @@ async function fetchJson(url,options){
 const localSave=Store.save.bind(Store);
 Store.save=function(data){
  if(!Cloud.ready)return localSave(data);
+ data._syncVersion=(Number(data._syncVersion)||0)+1;
  Cloud.pending=JSON.parse(JSON.stringify(data));
  badge('পরিবর্তন Cloud-এ Save হচ্ছে…',false,{});
  if(Cloud.conflict){badge('অন্য ডিভাইসের সঙ্গে পরিবর্তনের বিরোধ। Draft ব্যাকআপ নিয়ে Reload করুন।',true,{backup:true,reload:true});return false}
@@ -53,12 +54,12 @@ async function flush(){
  const snapshot=Cloud.pending;Cloud.pending=null;Cloud.busy=true;
  try{
   const out=await fetchJson('/api/clinic',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({state:snapshot,revision:Cloud.revision})});
-  Cloud.revision=out.revision;Cloud.lastError='';
+  Cloud.revision=out.revision;Cloud.lastError='';Cloud.lastWriteAt=Date.now();
   badge('✓ সব পরিবর্তন Cloud-এ সংরক্ষিত',false,{});
  }catch(e){
   Cloud.pending=Cloud.pending||snapshot;
   Cloud.lastError=e.message;
-  if(e.status===409){Cloud.conflict=true;badge('অন্য ডিভাইসে নতুন পরিবর্তন হয়েছে। কোনো তথ্য overwrite করা হয়নি।',true,{backup:true,reload:true})}
+  if(e.status===409){Cloud.conflict=true;badge('একই তথ্যের দুটি Save একসঙ্গে হয়েছে। ডেটা মুছে যায়নি। প্রথমে ব্যাকআপ ডাউনলোড করে তারপর Cloud Reload করুন।',true,{backup:true,reload:true})}
   else{badge('Cloud Save হয়নি: '+e.message,true,{retry:true,backup:true})}
  }finally{
   Cloud.busy=false;
@@ -86,6 +87,8 @@ async function pollCloud(){
  try{
   const incoming=await fetchJson('/api/clinic');
   if(!incoming.state||incoming.revision===Cloud.revision)return;
+  // Blob overwrite caches can briefly return an older ETag. Never restore older records over new work.
+  if((Number(incoming.state._syncVersion)||0)<=(Number(D._syncVersion)||0))return;
   const modalOpen=!!(document.querySelector('#modal')&&!$('#modal').hidden);
   if(W||modalOpen){badge('অন্য ডিভাইসের নতুন ডেটা আছে। কাজ শেষ করে Cloud Reload করুন।',true,{reload:true,backup:true});return}
   Cloud.revision=incoming.revision;D=incoming.state;render();
@@ -93,31 +96,30 @@ async function pollCloud(){
  }catch(e){if(e.status===401)loginView('Session শেষ হয়েছে। আবার Login করুন।')}
 }
 async function cloudOpen(){
- badge('Private Cloud থেকে রোগীর তথ্য আনা হচ্ছে…',false,{});
- const remote=await fetchJson('/api/clinic');
- const legacy=Store.load()||JSON.parse(JSON.stringify(DEF));
- const legacyCount=countLocal(legacy);
+ badge('Private Cloud থেকে তথ্য যাচাই হচ্ছে…',false,{});
+ let remote=await fetchJson('/api/clinic');
  if(remote.state){
-  if(legacyCount>0&&!localStorage.getItem('amanah-cloud-was-connected')){
-   // Preserve existing patient data; don't silently replace the former browser-only database.
-   try{localStorage.setItem('amanah-before-cloud-migration',JSON.stringify(legacy))}catch(e){}
-   saveBackup(legacy,'amanah-legacy-before-cloud-'+today()+'.json');
-   if(!confirm('এই ডিভাইসের আগের '+bn(legacy.patients.length)+' জন রোগীর স্থানীয় ব্যাকআপ ডাউনলোড করা হয়েছে। Cloud-এ আলাদা ডেটা আছে। Cloud-এর ডেটা খুলবে? স্থানীয় ডেটা স্বয়ংক্রিয়ভাবে মিশবে না।'))throw Error('Cloud ডেটা খোলা বাতিল। স্থানীয় তথ্য অক্ষত আছে।');
-  }
+  // Only clean v2 data is read. Legacy local data is not imported automatically.
   D=remote.state;Cloud.revision=remote.revision;
  }else{
-  if(legacyCount>0){
-   saveBackup(legacy,'amanah-before-first-cloud-upload-'+today()+'.json');
-   if(!confirm('এই ডিভাইসে '+bn(legacy.patients.length)+' জন রোগীর তথ্য আছে। ব্যাকআপ ডাউনলোড হয়েছে। প্রথমবার PRIVATE Cloud-এ এই তথ্য সংরক্ষণ করবে? অন্য ডিভাইসের তথ্য আগে থাকলে overwrite হবে না।'))throw Error('Cloud-এ আপলোড বাতিল। স্থানীয় তথ্য অক্ষত আছে।');
+  // Fresh start. Keep prior v1 browser records untouched, but completely separate.
+  const fresh=JSON.parse(JSON.stringify(DEF));
+  fresh._syncVersion=0;
+  try{
+   const uploaded=await fetchJson('/api/clinic',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({state:fresh,revision:null})});
+   D=fresh;Cloud.revision=uploaded.revision;
+  }catch(e){
+   if(e.status!==409)throw e;
+   // Another tab/device initialized v2 first; use it instead of showing a false conflict.
+   remote=await fetchJson('/api/clinic');
+   if(!remote.state)throw Error('Cloud data is being initialized. Try logging in again.');
+   D=remote.state;Cloud.revision=remote.revision;
   }
-  const uploaded=await fetchJson('/api/clinic',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({state:legacy,revision:null})});
-  D=legacy;Cloud.revision=uploaded.revision;
  }
- try{localStorage.setItem('amanah-cloud-was-connected','1')}catch(e){}
- Cloud.ready=true;Cloud.pending=null;Cloud.conflict=false;Cloud.lastError='';
+ Cloud.ready=true;Cloud.pending=null;Cloud.conflict=false;Cloud.lastError='';Cloud.lastWriteAt=Date.now();
  $('#login').hidden=true;$('#login').style.display='none';$('#shell').hidden=false;
  enter();
- badge('✓ Private Cloud Sync চালু • অন্য ডিভাইসেও একই ডেটা',false,{});
+ badge('✓ Clean Cloud শুরু • রোগী ০ থেকে শুরু',false,{});
  if(!window.__amanahCloudPolling){window.__amanahCloudPolling=setInterval(pollCloud,20000)}
 }
 $('#loginForm').onsubmit=async e=>{
