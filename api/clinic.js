@@ -2,7 +2,8 @@
 const crypto=require('node:crypto');
 const {get,put,BlobNotFoundError,BlobPreconditionFailedError}=require('@vercel/blob');
 const {json,sameOrigin,parseInput,authorized,configReady}=require('../lib/clinic-security');
-const PATH='amanah-clinic/v2/state.encrypted.json';
+const STORE_SCOPE=process.env.VERCEL_ENV==='production'?'v2':'v2-preview';
+const PATH='amanah-clinic/'+STORE_SCOPE+'/state.encrypted.json';
 const AAD=Buffer.from('amanah-clinic-v2');
 function key(){const raw=process.env.AMANAH_DATA_KEY||'';if(!/^[a-f0-9]{64}$/i.test(raw))throw Error('Data encryption key missing');return Buffer.from(raw,'hex')}
 function encrypt(d){
@@ -58,7 +59,7 @@ module.exports=async function handler(req,res){
   // Immutable encrypted daily snapshot. A failed backup never rolls back the verified primary write.
   const day=new Date().toISOString().slice(0,10);
   try{
-   await put('amanah-clinic/v2/backups/'+day+'.encrypted.json',encrypted,{access:'private',contentType:'application/json',addRandomSuffix:false});
+   await put('amanah-clinic/'+STORE_SCOPE+'/backups/'+day+'.encrypted.json',encrypted,{access:'private',contentType:'application/json',addRandomSuffix:false});
   }catch(e){if(!/already exists|blob already exists|409/i.test(String(e?.message)))console.warn('Daily backup unavailable',e?.name)}
   return json(res,200,{ok:true,revision:written.etag});
  }catch(e){
