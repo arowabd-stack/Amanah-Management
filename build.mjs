@@ -5,6 +5,9 @@ const target='public/index.html';
 if(!existsSync(source) || statSync(source).size<100_000)throw new Error('Amanah source HTML missing or truncated');
 for(const asset of ['public/pricing.js','public/cloud.js'])if(!existsSync(asset))throw new Error('Missing clinic enhancement: '+asset);
 let html=readFileSync(source,'utf8');
+// Run the new clinic in a completely separate local namespace. The old v1 data is never auto-imported.
+if(!html.includes("KEY:'amanah_clinic_v1'"))throw new Error('Legacy storage key missing');
+html=html.replace("KEY:'amanah_clinic_v1'","KEY:'amanah_clinic_clean_v2'");
 // Disable legacy browser-only authentication; the cloud client handles authenticated login.
 const start=html.indexOf('async function checkLogin(');
 const mid=html.indexOf('function enter(){',start);
