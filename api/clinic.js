@@ -56,6 +56,11 @@ module.exports=async function handler(req,res){
   const opt={access:'private',contentType:'application/json',cacheControlMaxAge:60,addRandomSuffix:false};
   if(body.revision){opt.allowOverwrite=true;opt.ifMatch=body.revision}
   const written=await put(PATH,encrypted,opt);
+  // Immutable encrypted daily snapshot. A failed backup never rolls back the verified primary write.
+  const day=new Date().toISOString().slice(0,10);
+  try{
+   await put('amanah-clinic/v1/backups/'+day+'.encrypted.json',encrypted,{access:'private',contentType:'application/json',addRandomSuffix:false});
+  }catch(e){if(!/already exists|blob already exists|409/i.test(String(e?.message)))console.warn('Daily backup unavailable',e?.name)}
   return json(res,200,{ok:true,revision:written.etag});
  }catch(e){
   if(e instanceof BlobPreconditionFailedError||e?.name==='BlobPreconditionFailedError'||/already exists|precondition|conflict/i.test(String(e?.message)))return json(res,409,{error:'Another device wrote data first',code:'STALE_REVISION'});
