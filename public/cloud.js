@@ -29,6 +29,12 @@ overlayStyle.textContent=[
 '#amanahNoticeLive{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}',
 '@media(max-width:700px){#amanahNoticeHub{top:max(9px,env(safe-area-inset-top));right:max(8px,env(safe-area-inset-right))}#amanahNoticeBell{width:42px;height:42px;border-radius:13px}#amanahNoticePanel{width:min(365px,calc(100vw - 16px));max-height:calc(100dvh - 135px)}}',
 '@media(min-width:861px){#amanahNoticeHub{position:relative;top:auto;right:auto;inset:auto;flex:0 0 auto}#amanahNoticePanel{right:auto;left:0}}',
+'#amanahNoticeList li.appointment{background:#f0f8f2;margin:4px 0;border:1px solid #d9e7dd;border-radius:12px;padding:0}',
+'#amanahNoticeList .appt-open{display:flex;gap:10px;align-items:flex-start;width:100%;padding:12px 9px;border:0;background:transparent;text-align:left;cursor:pointer;color:inherit;font:inherit;border-radius:12px}',
+'#amanahNoticeList .appt-open:hover{background:#e5f2e9}',
+'#amanahNoticeList .appt-open:focus-visible{outline:3px solid #a2cdb2;outline-offset:2px}',
+'#amanahNoticeList .appt-action{font-size:12px;color:#17614a;font-weight:800;white-space:nowrap;flex:none;padding-top:3px}',
+'#amanahNoticePanel .notice-preference{padding:11px 15px;border-top:1px solid #edf1ee;font-size:12px;color:#657c6d;line-height:1.6}',
 '@media print{#amanahNoticeHub{display:none!important}}'
 ].join('');
 document.head.appendChild(overlayStyle);
@@ -41,6 +47,7 @@ hub.innerHTML=[
 '<section id="amanahNoticePanel" aria-label="Cloud ও অ্যাপ নোটিফিকেশন" hidden>',
 '<div class="notice-head"><span class="notice-title">নোটিফিকেশন</span><button type="button" id="amanahNoticeClose" aria-label="নোটিফিকেশন বন্ধ করুন">বন্ধ করুন</button></div>',
 '<ol id="amanahNoticeList"></ol><div id="amanahNoticeEmpty" hidden>এখন কোনো নোটিফিকেশন নেই</div>',
+'<p class="notice-preference">অ্যাপয়েন্টমেন্ট রিমাইন্ডার অ্যাপ খোলা থাকলে দেখা যাবে। সময় সেটিংস থেকে বদলানো যায়।</p>',
 '<div id="amanahNoticeActions" hidden><button type="button" id="cloudRetry" hidden>আবার Save</button><button type="button" id="cloudBackup" hidden>ব্যাকআপ ডাউনলোড</button><button type="button" id="cloudReload" hidden>Cloud থেকে Reload</button></div>',
 '</section><span id="amanahNoticeLive" aria-live="polite" aria-atomic="true"></span>'
 ].join('');
@@ -52,30 +59,95 @@ const live=document.getElementById('amanahNoticeLive');
 const retry=document.getElementById('cloudRetry'),backup=document.getElementById('cloudBackup'),reload=document.getElementById('cloudReload');
 const messages=[];
 let unread=0,lastActions={};
+let appointmentReminders=[];
+const REMINDER_SEEN_KEY='amanah-reminder-seen-v1';
+const seenAppointmentKeys=new Set();
+try{const a=JSON.parse(localStorage.getItem(REMINDER_SEEN_KEY)||'[]');if(Array.isArray(a))for(const id of a.slice(-400))if(typeof id==='string'&&id.length<250)seenAppointmentKeys.add(id)}catch(e){}
+function rememberOpenedReminders(){for(const a of appointmentReminders)seenAppointmentKeys.add(a.key);try{localStorage.setItem(REMINDER_SEEN_KEY,JSON.stringify([...seenAppointmentKeys].slice(-400)))}catch(e){}}
+function dhakaDateParts(value){const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value||''));if(!m)return null;const y=+m[1],mon=+m[2],day=+m[3];if(y<2020||y>2100||mon<1||mon>12||day<1||day>31)return null;const verify=new Date(Date.UTC(y,mon-1,day));if(verify.getUTCFullYear()!==y||verify.getUTCMonth()!==mon-1||verify.getUTCDate()!==day)return null;return {y,mon,day}}
+function appointmentReminderRange(appt,mode){
+ const date=dhakaDateParts(appt?.date);if(!date)return null;
+ const midnightUTC=Date.UTC(date.y,date.mon-1,date.day);
+ const tz=6*3600000; // Bangladesh standard time (Asia/Dhaka), UTC+06:00.
+ const end=midnightUTC+86400000-tz;
+ const t=/^(\d{1,2}):(\d{2})$/.exec(String(appt.time||''));
+ const timeValid=!!(t&&+t[1]<24&&+t[2]<60);
+ const appointmentAt=timeValid?midnightUTC+(+t[1]*60 + +t[2])*60000-tz:null;
+ const trigger=mode==='12h'&&timeValid?appointmentAt-12*3600000:midnightUTC-86400000+20*3600000-tz;
+ return {trigger,end,appointmentAt};
+}
+function refreshAppointmentReminders(){
+ if(!Cloud.ready||!D||!Array.isArray(D.appts))return;
+ const mode=D.settings?.apptReminderMode==='12h'?'12h':'evening';
+ const now=Date.now();const next=[];
+ for(const a of D.appts){
+  if(!a||a.status!=='pending'||typeof a.id!=='string')continue;
+  const range=appointmentReminderRange(a,mode);
+  if(!range||now<range.trigger||now>=range.end)continue;
+  const p=a.patientId&&Array.isArray(D.patients)?D.patients.find(x=>x.id===a.patientId):null;
+  const name=(p?.name||a.name||'অ্যাপয়েন্টমেন্ট').trim();
+  const dateText=typeof fd==='function'?fd(a.date):a.date;
+  const timeText=a.time?(' • '+(typeof bn==='function'?bn(a.time):a.time)):' • সময় নির্ধারিত নয়';
+  const reminderKey=[a.id,a.date,a.time||'',mode].join('|');
+  next.push({key:reminderKey,appointmentId:a.id,message:'অ্যাপয়েন্টমেন্ট: '+name,subtitle:dateText+timeText,at:range.trigger,due:range.appointmentAt??range.end});
+ }
+ next.sort((a,b)=>a.due-b.due);
+ appointmentReminders=next.slice(0,100);
+ drawNotices();
+}
+function openReminderAppointment(id){
+ if(!Cloud.ready)return;
+ const appt=D.appts.find(a=>a.id===id&&a.status==='pending');
+ if(!appt){refreshAppointmentReminders();return;}
+ // Use the original appointment detail / edit modal, not a generic patient page.
+ openNotices(false);
+ calSel=appt.date;calM=appt.date.slice(0,7);
+ go('appts');openAppt(appt.id);
+ // If this appointment is linked to a registered patient, expose the patient file too.
+ if(appt.patientId&&Array.isArray(D.patients)&&D.patients.some(p=>p.id===appt.patientId)){
+  const saveButton=document.getElementById('ap_ok');
+  if(saveButton&&saveButton.parentElement&&!document.getElementById('apptPatientFileLink')){
+   const view=document.createElement('button');view.type='button';view.id='apptPatientFileLink';view.className='btn';view.textContent='রোগীর ফাইল';
+   view.addEventListener('click',()=>{closeModal();go('patient',appt.patientId)});
+   saveButton.parentElement.prepend(view);
+  }
+ }
+}
+
 function drawNotices(){
  list.replaceChildren();
- for(const item of messages){
+ for(const item of [...appointmentReminders.map(a=>({...a,kind:'appointment'})),...messages]){
   const row=document.createElement('li');if(item.error)row.className='error';
+  if(item.kind==='appointment')row.className='appointment';
   const dot=document.createElement('span');dot.className='notice-dot';dot.setAttribute('aria-hidden','true');
   const body=document.createElement('div');body.className='notice-copy';
   const copy=document.createElement('div');copy.textContent=item.message;
   const time=document.createElement('time');time.dateTime=new Date(item.at).toISOString();
   time.textContent=new Date(item.at).toLocaleTimeString('bn-BD',{hour:'numeric',minute:'2-digit'});
-  body.append(copy,time);row.append(dot,body);list.appendChild(row);
+  if(item.kind==='appointment'){
+   copy.style.fontWeight='750';time.textContent=item.subtitle;
+   const action=document.createElement('button');action.type='button';action.className='appt-open';action.setAttribute('aria-label',item.message+' • '+item.subtitle+' • ফাইল খুলুন');
+   const arrow=document.createElement('span');arrow.className='appt-action';arrow.textContent='দেখুন ›';
+   body.append(copy,time);action.append(dot,body,arrow);row.appendChild(action);
+   action.addEventListener('click',()=>openReminderAppointment(item.appointmentId));
+  }else{body.append(copy,time);row.append(dot,body)}
+  list.appendChild(row);
  }
- empty.hidden=messages.length!==0;
+ empty.hidden=messages.length!==0||appointmentReminders.length!==0;
  retry.hidden=!lastActions.retry;
  backup.hidden=!lastActions.backup;
  reload.hidden=!lastActions.reload;
  actionsPanel.hidden=retry.hidden&&backup.hidden&&reload.hidden;
  const critical=!!(Cloud.conflict||Cloud.lastError);
- count.hidden=!unread&&!critical;
- count.textContent=unread>0?(unread>9?'9+':String(unread)):'!';
- bell.setAttribute('aria-label',unread?unread+'টি নতুন নোটিফিকেশন দেখুন':critical?'জরুরি নোটিফিকেশন দেখুন':'নোটিফিকেশন খুলুন');
+ const pendingReminders=appointmentReminders.filter(a=>!seenAppointmentKeys.has(a.key)).length;
+ const totalUnread=Math.min(99,unread+pendingReminders);
+ count.hidden=!totalUnread&&!critical;
+ count.textContent=totalUnread>0?(totalUnread>9?'9+':String(totalUnread)):'!';
+ bell.setAttribute('aria-label',totalUnread?totalUnread+'টি নতুন নোটিফিকেশন দেখুন':critical?'জরুরি নোটিফিকেশন দেখুন':'নোটিফিকেশন খুলুন');
 }
 function openNotices(open){
  panel.hidden=!open;bell.setAttribute('aria-expanded',String(open));
- if(open){unread=0;drawNotices()}
+ if(open){unread=0;refreshAppointmentReminders();rememberOpenedReminders();drawNotices()}
 }
 bell.addEventListener('click',()=>openNotices(panel.hidden));
 document.getElementById('amanahNoticeClose').addEventListener('click',()=>{openNotices(false);bell.focus()});
