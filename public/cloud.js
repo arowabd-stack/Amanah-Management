@@ -4,18 +4,100 @@
 try{sessionStorage.removeItem('amanah_in')}catch(e){}
 const Cloud={ready:false,revision:null,pending:null,busy:false,conflict:false,lastError:'',timer:null,lastWriteAt:0};
 const overlayStyle=document.createElement('style');
-overlayStyle.textContent='#amanahCloudBar{display:none;position:fixed;top:9px;right:12px;z-index:600;background:#fff;color:#23553c;border:1px solid #c9decf;box-shadow:0 3px 18px #071b102e;border-radius:12px;max-width:min(94vw,480px);padding:10px 13px;line-height:1.5;font:700 12px system-ui,"Noto Sans Bengali",sans-serif}#amanahCloudBar.show{display:block}#amanahCloudBar.error{border-color:#da6e55;background:#fff2ef;color:#7c362b}#amanahCloudBar button{cursor:pointer;background:#e6f3e9;border:1px solid #b6d6bd;border-radius:8px;padding:5px 7px;margin-left:6px;font-size:11px;color:#1d5939}#amanahCloudBar.error button{background:#fff}#amanahCloudBar .actions{display:flex;flex-wrap:wrap;gap:4px;margin-top:7px}@media(max-width:700px){#amanahCloudBar{top:auto;bottom:72px;right:8px;left:8px;max-width:none}}@media print{#amanahCloudBar{display:none!important}}';
+overlayStyle.textContent=[
+'#amanahNoticeHub[hidden],#amanahNoticePanel[hidden],#amanahNoticeCount[hidden],#amanahNoticeActions[hidden],#amanahNoticeActions button[hidden]{display:none!important}',
+'#amanahNoticeHub{position:fixed;right:max(12px,env(safe-area-inset-right));top:max(12px,env(safe-area-inset-top));z-index:2000;font:500 13px/1.6 system-ui,sans-serif;color:#1b392b}',
+'#amanahNoticeBell{width:44px;height:44px;position:relative;display:grid;place-items:center;border-radius:14px;border:1px solid #d7e8dc;background:#fff;color:#196149;box-shadow:0 4px 17px #173e2a20;cursor:pointer}',
+'#amanahNoticeBell:hover{background:#f0f8f2}',
+'#amanahNoticeBell:focus-visible,#amanahNoticePanel button:focus-visible{outline:3px solid #b38d38;outline-offset:2px}',
+'#amanahNoticeCount{position:absolute;top:-6px;right:-6px;min-width:19px;height:19px;display:flex;align-items:center;justify-content:center;padding:0 4px;border-radius:99px;background:#cb443e;color:#fff;border:2px solid #fff;font:750 10px/1 system-ui,sans-serif}',
+'#amanahNoticePanel{position:absolute;right:0;top:calc(100% + 9px);width:min(380px,calc(100vw - 20px));max-height:min(68dvh,600px);display:flex;flex-direction:column;overflow:hidden;border:1px solid #dbe7df;border-radius:18px;background:#fff;box-shadow:0 15px 42px #15392737}',
+'#amanahNoticePanel .notice-head{display:flex;align-items:center;justify-content:space-between;gap:7px;padding:14px 15px 12px;border-bottom:1px solid #edf1ee}',
+'#amanahNoticePanel .notice-title{font-weight:850;font-size:16px}',
+'#amanahNoticePanel .notice-head button{border:0;background:#edf5ef;color:#24583c;border-radius:8px;padding:5px 9px;cursor:pointer;font:650 12px system-ui,sans-serif}',
+'#amanahNoticeList{padding:5px 9px;margin:0;list-style:none;overflow:auto;min-height:45px;overscroll-behavior:contain}',
+'#amanahNoticeList li{display:flex;align-items:flex-start;gap:10px;padding:12px 8px;border-bottom:1px solid #f0f3f1}',
+'#amanahNoticeList li:last-child{border-bottom:0}',
+'#amanahNoticeList .notice-dot{width:8px;height:8px;flex:none;border-radius:100%;background:#44a276;margin-top:8px}',
+'#amanahNoticeList li.error .notice-dot{background:#c94d43}',
+'#amanahNoticeList .notice-copy{overflow-wrap:anywhere;flex:1;min-width:0;font-size:13px;line-height:1.65;color:#294435}',
+'#amanahNoticeList li.error .notice-copy{color:#8c392f}',
+'#amanahNoticeList time{display:block;color:#87958b;font-size:11px;margin-top:4px}',
+'#amanahNoticeEmpty{padding:25px 12px;text-align:center;color:#819185}',
+'#amanahNoticeActions{display:flex;flex-wrap:wrap;gap:7px;padding:10px 15px 13px;border-top:1px solid #ebf0ec}',
+'#amanahNoticeActions button{cursor:pointer;border:1px solid #b8d6c3;border-radius:8px;background:#eaf5ec;color:#205d40;padding:8px 10px;font:700 12px/1.4 system-ui,sans-serif}',
+'#amanahNoticeLive{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}',
+'@media(max-width:700px){#amanahNoticeHub{top:max(9px,env(safe-area-inset-top));right:max(8px,env(safe-area-inset-right))}#amanahNoticeBell{width:42px;height:42px;border-radius:13px}#amanahNoticePanel{width:min(365px,calc(100vw - 16px));max-height:calc(100dvh - 135px)}}',
+'@media print{#amanahNoticeHub{display:none!important}}'
+].join('');
 document.head.appendChild(overlayStyle);
-const bar=document.createElement('div');bar.id='amanahCloudBar';bar.setAttribute('role','status');bar.setAttribute('aria-live','polite');
-bar.innerHTML='<span id="cloudStatusText">Cloud Sync</span><div class="actions"><button type="button" id="cloudRetry" hidden>আবার Save</button><button type="button" id="cloudBackup" hidden>ব্যাকআপ ডাউনলোড</button><button type="button" id="cloudReload" hidden>Cloud থেকে Reload</button></div>';
-document.body.appendChild(bar);
-const msg=document.getElementById('cloudStatusText'),retry=document.getElementById('cloudRetry'),backup=document.getElementById('cloudBackup'),reload=document.getElementById('cloudReload');
+const hub=document.createElement('div');
+hub.id='amanahNoticeHub';hub.hidden=true;
+hub.innerHTML=[
+'<button type="button" id="amanahNoticeBell" aria-label="নোটিফিকেশন খুলুন" aria-haspopup="true" aria-controls="amanahNoticePanel" aria-expanded="false" title="নোটিফিকেশন">',
+'<svg aria-hidden="true" width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>',
+'<span id="amanahNoticeCount" hidden></span></button>',
+'<section id="amanahNoticePanel" aria-label="Cloud ও অ্যাপ নোটিফিকেশন" hidden>',
+'<div class="notice-head"><span class="notice-title">নোটিফিকেশন</span><button type="button" id="amanahNoticeClose" aria-label="নোটিফিকেশন বন্ধ করুন">বন্ধ করুন</button></div>',
+'<ol id="amanahNoticeList"></ol><div id="amanahNoticeEmpty" hidden>এখন কোনো নোটিফিকেশন নেই</div>',
+'<div id="amanahNoticeActions" hidden><button type="button" id="cloudRetry" hidden>আবার Save</button><button type="button" id="cloudBackup" hidden>ব্যাকআপ ডাউনলোড</button><button type="button" id="cloudReload" hidden>Cloud থেকে Reload</button></div>',
+'</section><span id="amanahNoticeLive" aria-live="polite" aria-atomic="true"></span>'
+].join('');
+document.body.appendChild(hub);
+const bell=document.getElementById('amanahNoticeBell'),panel=document.getElementById('amanahNoticePanel');
+const count=document.getElementById('amanahNoticeCount'),list=document.getElementById('amanahNoticeList');
+const empty=document.getElementById('amanahNoticeEmpty'),actionsPanel=document.getElementById('amanahNoticeActions');
+const live=document.getElementById('amanahNoticeLive');
+const retry=document.getElementById('cloudRetry'),backup=document.getElementById('cloudBackup'),reload=document.getElementById('cloudReload');
+const messages=[];
+let unread=0,lastActions={};
+function drawNotices(){
+ list.replaceChildren();
+ for(const item of messages){
+  const row=document.createElement('li');if(item.error)row.className='error';
+  const dot=document.createElement('span');dot.className='notice-dot';dot.setAttribute('aria-hidden','true');
+  const body=document.createElement('div');body.className='notice-copy';
+  const copy=document.createElement('div');copy.textContent=item.message;
+  const time=document.createElement('time');time.dateTime=new Date(item.at).toISOString();
+  time.textContent=new Date(item.at).toLocaleTimeString('bn-BD',{hour:'numeric',minute:'2-digit'});
+  body.append(copy,time);row.append(dot,body);list.appendChild(row);
+ }
+ empty.hidden=messages.length!==0;
+ retry.hidden=!lastActions.retry;
+ backup.hidden=!lastActions.backup;
+ reload.hidden=!lastActions.reload;
+ actionsPanel.hidden=retry.hidden&&backup.hidden&&reload.hidden;
+ const critical=!!(Cloud.conflict||Cloud.lastError);
+ count.hidden=!unread&&!critical;
+ count.textContent=unread>0?(unread>9?'9+':String(unread)):'!';
+ bell.setAttribute('aria-label',unread?unread+'টি নতুন নোটিফিকেশন দেখুন':critical?'জরুরি নোটিফিকেশন দেখুন':'নোটিফিকেশন খুলুন');
+}
+function openNotices(open){
+ panel.hidden=!open;bell.setAttribute('aria-expanded',String(open));
+ if(open){unread=0;drawNotices()}
+}
+bell.addEventListener('click',()=>openNotices(panel.hidden));
+document.getElementById('amanahNoticeClose').addEventListener('click',()=>{openNotices(false);bell.focus()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!panel.hidden){openNotices(false);bell.focus()}});
+document.addEventListener('click',e=>{if(!hub.contains(e.target)&&!panel.hidden)openNotices(false)});
 function badge(status,error,actions){
- bar.className='show'+(error?' error':'');
- msg.textContent=status;
- retry.hidden=!(actions&&actions.retry);
- backup.hidden=!(actions&&actions.backup);
- reload.hidden=!(actions&&actions.reload);
+ // All Cloud status events go into the bell; the former floating banner is removed.
+ if(!Cloud.ready)return;
+ hub.hidden=false;
+ const message=String(status||'').trim();
+ if(!message)return;
+ if(!error&&(/হচ্ছে|যাচাই হচ্ছে|প্রয়োজন/.test(message)))return;
+ const now=Date.now();
+ const top=messages[0];
+ if(top&&top.message===message&&top.error===!!error&&now-top.at<30000)top.at=now;
+ else{
+  messages.unshift({message,error:!!error,at:now});
+  if(messages.length>25)messages.pop();
+  if(panel.hidden)unread=Math.min(99,unread+1);
+ }
+ lastActions=actions||{};
+ if(error)live.textContent='নোটিফিকেশনে সতর্কতা এসেছে। নোটিফিকেশন বেল খুলে দেখুন।';
+ drawNotices();
 }
 function countLocal(d){return (d?.patients?.length||0)+(d?.visits?.length||0)+(d?.appts?.length||0)}
 function saveBackup(d,filename){
@@ -25,6 +107,8 @@ function saveBackup(d,filename){
 }
 function loginView(message){
  Cloud.ready=false;
+ hub.hidden=true;
+ openNotices(false);
  const login=$('#login');const shell=$('#shell');
  if(shell)shell.hidden=true;
  if(login){login.hidden=false;login.style.display='';}
@@ -117,6 +201,7 @@ async function cloudOpen(){
   }
  }
  Cloud.ready=true;Cloud.pending=null;Cloud.conflict=false;Cloud.lastError='';Cloud.lastWriteAt=Date.now();
+ hub.hidden=false;
  $('#login').hidden=true;$('#login').style.display='none';$('#shell').hidden=false;
  enter();
  badge('✓ Private Cloud প্রস্তুত • '+bn(D.patients.length)+' জন রোগী',false,{});
