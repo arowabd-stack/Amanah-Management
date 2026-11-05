@@ -196,6 +196,7 @@ render=function(...args){
  if(hub.parentElement!==document.body)document.body.appendChild(hub);
  const result=renderBeforeNoticeBell.apply(this,args);
  placeNoticeBell();
+ refreshAppointmentReminders();
  return result;
 };
 if(typeof bellDesktopMedia.addEventListener==='function')bellDesktopMedia.addEventListener('change',placeNoticeBell);
@@ -229,6 +230,7 @@ Store.save=function(data){
  if(!Cloud.ready)return localSave(data);
  data._syncVersion=(Number(data._syncVersion)||0)+1;
  Cloud.pending=JSON.parse(JSON.stringify(data));
+ refreshAppointmentReminders();
  badge('পরিবর্তন Cloud-এ Save হচ্ছে…',false,{});
  if(Cloud.conflict){badge('অন্য ডিভাইসের সঙ্গে পরিবর্তনের বিরোধ। Draft ব্যাকআপ নিয়ে Reload করুন।',true,{backup:true,reload:true});return false}
  clearTimeout(Cloud.timer);Cloud.timer=setTimeout(flush,250);
@@ -308,6 +310,7 @@ async function cloudOpen(){
  enter();
  badge('✓ Private Cloud প্রস্তুত • '+bn(D.patients.length)+' জন রোগী',false,{});
  if(!window.__amanahCloudPolling){window.__amanahCloudPolling=setInterval(pollCloud,20000)}
+ if(!window.__amanahReminderClock){window.__amanahReminderClock=setInterval(refreshAppointmentReminders,60000)}
 }
 $('#loginForm').onsubmit=async e=>{
  e.preventDefault();
@@ -324,7 +327,25 @@ const prevSettings=pSettings;
 pSettings=function(m){
  prevSettings(m);
  const n=$('#u_n');if(n){const card=n.closest('.card');if(card)card.innerHTML='<div class="h3">নিরাপদ Cloud Login</div><p class="price-note">রোগীর তথ্য এখন Private Cloud-এ থাকে এবং Server-side Admin Login দিয়ে সুরক্ষিত। পাসওয়ার্ড বদলাতে Vercel Environment-এর AMANAH_ADMIN_PASSWORD_HASH নিরাপদভাবে পরিবর্তন করতে হবে। আগের ব্রাউজার-ভিত্তিক password আর ব্যবহৃত হয় না।</p>';}
+
+ const target=m.querySelector('.grid.g2')||m;
+ const card=document.createElement('div');card.className='card';
+ card.innerHTML='<div class="h3">অ্যাপয়েন্টমেন্ট রিমাইন্ডার</div>'+
+ '<label for="apptReminderSetting">নোটিফিকেশন কখন শুরু হবে?</label>'+
+ '<select id="apptReminderSetting" aria-describedby="apptReminderExplanation">'+
+ '<option value="evening">অ্যাপয়েন্টমেন্টের আগের দিন রাত ৮টা</option>'+
+ '<option value="12h">অ্যাপয়েন্টমেন্টের ১২ ঘণ্টা আগে</option></select>'+
+ '<p class="price-note" id="apptReminderExplanation">রিমাইন্ডার বাংলাদেশের সময় (UTC+06:00) অনুযায়ী হিসাব হবে। সময় লেখা না থাকলে আগের দিন রাত ৮টায় দেখাবে। ওয়েবসাইট খোলা থাকলে নোটিফিকেশন Bell-এ আসবে; বন্ধ থাকলে পরেরবার Login করলে দেখা যাবে।</p>';
+ target.appendChild(card);
+ const reminderSelect=card.querySelector('#apptReminderSetting');
+ reminderSelect.value=D.settings.apptReminderMode==='12h'?'12h':'evening';
+ reminderSelect.addEventListener('change',()=>{
+   D.settings.apptReminderMode=reminderSelect.value==='12h'?'12h':'evening';
+   save();refreshAppointmentReminders();toast('রিমাইন্ডারের সময় সেভ করা হচ্ছে');
+ });
+
 };
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&Cloud.ready)refreshAppointmentReminders()});
 loginView('');
 fetchJson('/api/session').then(s=>s.authenticated?cloudOpen():loginView('Cloud Admin Login করুন')).catch(e=>loginView('Cloud সংযোগ পাওয়া যাচ্ছে না: '+e.message));
 })();
