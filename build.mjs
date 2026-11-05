@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'no
 const source='Amanah Center - Rogi Management.html';
 const target='public/index.html';
 if(!existsSync(source) || statSync(source).size<100_000)throw new Error('Amanah source HTML missing or truncated');
-for(const asset of ['public/pricing.js','public/cloud.js'])if(!existsSync(asset))throw new Error('Missing clinic enhancement: '+asset);
+for(const asset of ['public/pricing.js','public/cloud.js','public/readability.css'])if(!existsSync(asset))throw new Error('Missing clinic enhancement: '+asset);
 let html=readFileSync(source,'utf8');
 // Run the new clinic in a completely separate local namespace. The old v1 data is never auto-imported.
 if(!html.includes("KEY:'amanah_clinic_v1'"))throw new Error('Legacy storage key missing');
@@ -21,6 +21,8 @@ html=html.slice(0,loginStart)+safeFallback+html.slice(loginEnd);
 html=html.replace('placeholder="প্রথমবার: amanah123"','placeholder="Cloud Admin Password"');
 const injected='<script src="/pricing.js"></script>\n<script src="/cloud.js"></script>\n';
 if(!html.includes('</body>'))throw new Error('Missing body end');
+if(!html.includes('</head>'))throw new Error('Missing document head');
+html=html.replace('</head>','<link rel="stylesheet" href="/readability.css">\n</head>');
 html=html.replace('</body>',injected+'</body>');
 if(html.includes("sessionStorage.getItem('amanah_in')")||html.includes('amanah123')||!html.includes('/cloud.js'))throw new Error('Unsafe legacy login survived build');
 mkdirSync('public',{recursive:true});
