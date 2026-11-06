@@ -1,0 +1,42 @@
+/* Shared bilingual address suggestions (client-side; no network queries). */
+.amanah-address-options{
+  position:fixed;
+  z-index:90;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  background:#fff;
+  color:var(--ink,#18304a);
+  border:1px solid var(--line,#d8e1e7);
+  border-radius:12px;
+  box-shadow:0 12px 32px rgba(12,34,56,.17);
+  padding:5px;
+  scrollbar-width:thin;
+}
+.amanah-address-options[hidden]{display:none}
+.amanah-address-option{
+  width:100%;
+  display:flex;
+  flex-wrap:nowrap;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:10px 11px;
+  border:0;
+  border-radius:8px;
+  background:transparent;
+  color:inherit;
+  text-align:left;
+  font:inherit;
+  cursor:pointer;
+}
+.amanah-address-option:hover,
+.amanah-address-option[aria-selected="true"]{background:var(--sky,#edf5fa)}
+.amanah-address-option:focus-visible{outline:2px solid var(--navy2,#286b9b);outline-offset:-2px}
+.amanah-address-label{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.amanah-address-name{font-weight:750;font-size:14px;line-height:1.4}
+.amanah-address-hint{font-size:12px;color:var(--mute,#607487);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.35}
+.amanah-address-kind{flex:none;font-size:11px;font-weight:650;color:var(--navy2,#286b9b);background:var(--sky,#edf5fa);border-radius:99px;padding:3px 7px;white-space:nowrap}
+@media (max-width:480px){
+ .amanah-address-options{border-radius:10px}
+ .amanah-address-option{padding:11px 9px}
+}

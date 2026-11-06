@@ -52,6 +52,45 @@ assert.equal(await p.evaluate(()=>W._allowBlank),true);
 assert.ok(await p.locator('#wizardSteps .needs-attention').count()>0);
 assert.ok(await p.locator('#wnext').innerText().then(t=>t.includes('ফাঁকা')));
 console.log('WIZARD FIELDS / WARNINGS OK');passed++;
+
+const lookup=await p.evaluate(()=>({
+  kathoir:AmanahAddressSearch.suggest('Kathoir').map(item=>item.value),
+  alternative:AmanahAddressSearch.suggest('Khatir').map(item=>item.value),
+  bangla:AmanahAddressSearch.suggest('কাঠ').map(item=>item.value),
+  sadar:AmanahAddressSearch.suggest('Sunamganj Sadar').map(item=>item.value),
+  sholaghar:AmanahAddressSearch.suggest('Sholaghar').map(item=>item.value),
+  dolura:AmanahAddressSearch.suggest('Dolura').map(item=>item.value),
+  surma:AmanahAddressSearch.suggest('Surma').map(item=>item.value),
+  purba:AmanahAddressSearch.suggest('Purba Pagla').map(item=>item.value)
+}));
+const kathoir='কাঠইর, সুনামগঞ্জ সদর, সুনামগঞ্জ';
+assert.equal(lookup.kathoir[0],kathoir);
+assert.equal(lookup.alternative[0],kathoir);
+assert.equal(lookup.bangla[0],kathoir);
+assert.ok(lookup.sadar.includes('সুনামগঞ্জ সদর, সুনামগঞ্জ'));
+assert.ok(lookup.sholaghar.includes('ষোলঘর, সুনামগঞ্জ সদর, সুনামগঞ্জ'));
+assert.ok(lookup.dolura.includes('ডলুরা, জাহাঙ্গীরনগর, সুনামগঞ্জ সদর, সুনামগঞ্জ'));
+assert.ok(lookup.surma.includes('সুরমা, সুনামগঞ্জ সদর, সুনামগঞ্জ'));
+assert.ok(lookup.surma.includes('সুরমা, দোয়ারাবাজার, সুনামগঞ্জ'));
+assert.ok(lookup.purba.includes('পূর্ব পাগলা, শান্তিগঞ্জ, সুনামগঞ্জ'));
+console.log('BENGALI/ENGLISH ALIAS SEARCH OK');passed++;
+await p.locator('#w_addr').fill('Kathoir');
+await p.locator('#amanah-address-options [role="option"]').first().click();
+assert.equal(await p.locator('#w_addr').inputValue(),kathoir);
+assert.equal(await p.evaluate(()=>W.np.address),kathoir);
+await p.locator('#w_addr').fill('Sholaghar');
+await p.locator('#w_addr').press('ArrowDown');
+await p.locator('#w_addr').press('Enter');
+assert.equal(await p.locator('#w_addr').inputValue(),'ষোলঘর, সুনামগঞ্জ সদর, সুনামগঞ্জ');
+console.log('MOUSE & KEYBOARD SELECTION OK');passed++;
+await p.goto('https://qa.amanah.test/patient/?id=p1');
+await p.evaluate(()=>editPatient('p1'));
+await p.locator('#ep_addr').fill('Mongalkata');
+await p.locator('#amanah-address-options [role="option"]').first().click();
+assert.equal(await p.locator('#ep_addr').inputValue(),'মঙ্গলকাটা, জাহাঙ্গীরনগর, সুনামগঞ্জ সদর, সুনামগঞ্জ');
+await p.evaluate(()=>closeModal());
+console.log('PATIENT EDIT ADDRESS SUGGESTIONS OK');passed++;
+
 assert.equal(writes.length,0,'No clinic writes during QA');
 assert.deepEqual(errs,[],'browser page errors');
 console.log('ALL '+passed+' PAGE/WIZARD CHECKS PASSED');
