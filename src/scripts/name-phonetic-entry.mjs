@@ -1,9 +1,9 @@
 /*
  * Amanah Center name input: phonetic Banglish -> Bangla Unicode.
- * The phonetic engine is @subhesadek/avro-phonetic (MPL-2.0), not extracted from Ridmik APK.
- * All conversion is local in the browser; no patient name is transmitted.
+ * Keymap, conversion rules and suggestion heuristics are taken from the user's
+ * own Ridmik-style HTML prototype. All conversion is browser-local.
  */
-import {toBangla} from '@subhesadek/avro-phonetic';
+import {conv,suggest as userSuggest} from './phonetic-rules.mjs';
 
 (function(){
   'use strict';
@@ -49,10 +49,114 @@ import {toBangla} from '@subhesadek/avro-phonetic';
   function transliterateWord(raw){
     if(!/^[A-Za-z]+$/.test(raw))return raw;
     const lower=raw.toLowerCase();
-    return overrides[lower]||toBangla(lower,{banglaDigits:false,banglaFullStop:false});
+    return overrides[lower]||conv(raw);
   }
   function transliterateText(text){
     return String(text).replace(/[A-Za-z]+/g,word=>transliterateWord(word));
+  }
+  // Every visible suggestion must be a Bengali Unicode string, never Romanized English.
+  // The initial suggestion preserves the field's current output; following entries
+  // come from the user's own phonetic engine and skeleton/letter-alternation rules.
+  const nameVariants=Object.freeze({
+    masum:['মাসুম','মাসূম'],parvej:['পারভেজ','পার্ভেজ'],parvez:['পারভেজ','পার্ভেজ'],
+    rahim:['রহিম','রাহিম'],hossain:['হোসেন','হোসাইন','হুসাইন'],
+    hussain:['হোসেন','হুসাইন'],nur:['নুর','নূর'],noor:['নূর','নুর'],
+    md:['মোঃ','মো.','মোহাম্মদ'],mohammad:['মোহাম্মদ','মুহাম্মদ'],
+    ali:['আলী','আলি'],hasan:['হাসান','হাছান'],
+    parbeej:['পারভেজ'],mim:['মিম'],fatema:['ফাতেমা','ফাতিমা'],
+    sadia:['সাদিয়া','সাদিয়া'],karim:['করিম','কারিম']
+  });
+  function suggestionsFor(raw){
+    const bangla=transliterateWord(raw),natural=conv(raw);
+    const options=[bangla,...(nameVariants[raw.toLowerCase()]||[]),natural];
+    if(raw!==raw.toLowerCase())options.push(conv(raw.toLowerCase()));
+    options.push(...userSuggest(natural));
+    const unique=[];
+    for(const word of options){
+      if(typeof word==='string'&&/[ঀ-৿]/u.test(word)&&!/[A-Za-z]/.test(word)&&!unique.includes(word)){
+        unique.push(word);
+      }
+      if(unique.length===5)break;
+    }
+    return unique;
+  }
+  const list=document.createElement('div');
+  list.id='amanah-name-suggestions';
+  list.className='amanah-name-suggestions';
+  list.setAttribute('role','listbox');
+  list.setAttribute('aria-label','বাংলা নামের সাজেশন');
+  list.hidden=true;
+  document.body.appendChild(list);
+  let suggestionInput=null,selectedSuggestion=0,renderedSuggestions=[];
+  function closeSuggestions(){
+    list.hidden=true;
+    list.replaceChildren();
+    renderedSuggestions=[];
+    selectedSuggestion=0;
+    if(suggestionInput){
+      suggestionInput.setAttribute('aria-expanded','false');
+      suggestionInput.removeAttribute('aria-activedescendant');
+    }
+  }
+  function locateSuggestions(){
+    if(list.hidden||!suggestionInput?.isConnected)return;
+    const r=suggestionInput.getBoundingClientRect();
+    const width=Math.max(180,Math.min(window.innerWidth-16,r.width));
+    list.style.width=width+'px';
+    list.style.left=Math.max(8,Math.min(r.left,window.innerWidth-width-8))+'px';
+    const height=list.offsetHeight;
+    list.style.top=(window.innerHeight-r.bottom<height+10&&r.top>height+10?
+      r.top-height-6:r.bottom+6)+'px';
+  }
+  function updateSelected(index){
+    if(!renderedSuggestions.length)return;
+    selectedSuggestion=(index+renderedSuggestions.length)%renderedSuggestions.length;
+    list.querySelectorAll('[role="option"]').forEach((node,i)=>{
+      const selected=i===selectedSuggestion;
+      node.setAttribute('aria-selected',String(selected));
+      if(selected){
+        suggestionInput?.setAttribute('aria-activedescendant',node.id);
+        node.scrollIntoView({block:'nearest',inline:'nearest'});
+      }
+    });
+  }
+  function selectSuggestion(index){
+    const input=suggestionInput;
+    if(!input?.isConnected||!renderedSuggestions[index])return;
+    const current=validWord(input);
+    if(!current)return;
+    const value=renderedSuggestions[index];
+    input.setRangeText(value,current.start,current.start+current.bangla.length,'end');
+    activeWord.set(input,{...current,bangla:value});
+    notify(input);
+    closeSuggestions();
+    input.focus({preventScroll:true});
+  }
+  function showSuggestions(input){
+    suggestionInput=input;
+    const current=validWord(input);
+    if(!current||!current.raw){closeSuggestions();return}
+    renderedSuggestions=suggestionsFor(current.raw);
+    list.replaceChildren();
+    if(!renderedSuggestions.length){closeSuggestions();return}
+    renderedSuggestions.forEach((value,i)=>{
+      const button=document.createElement('button');
+      button.type='button';
+      button.className='amanah-name-suggestion';
+      button.setAttribute('role','option');
+      button.setAttribute('aria-selected',String(i===0));
+      button.id='amanah-name-suggestion-'+i;
+      // Intentionally Bengali only, including all accessibility-visible option labels.
+      button.textContent=value;
+      button.addEventListener('pointerdown',event=>event.preventDefault());
+      button.addEventListener('click',()=>selectSuggestion(i));
+      list.appendChild(button);
+    });
+    selectedSuggestion=0;
+    list.hidden=false;
+    input.setAttribute('aria-expanded','true');
+    input.setAttribute('aria-activedescendant','amanah-name-suggestion-0');
+    locateSuggestions();
   }
   const enabled=new WeakMap(),activeWord=new WeakMap(),attached=new WeakSet();
   let emitting=false;
@@ -71,6 +175,7 @@ import {toBangla} from '@subhesadek/avro-phonetic';
       activeWord.delete(input);
     }
     notify(input);
+    if(remember&&raw)showSuggestions(input);else closeSuggestions();
   }
   function validWord(input){
     const current=activeWord.get(input);
@@ -114,6 +219,7 @@ import {toBangla} from '@subhesadek/avro-phonetic';
     }
     // On space, punctuation or cursor editing, finish the current word.
     activeWord.delete(input);
+    closeSuggestions();
   }
   function handlePaste(event){
     const input=event.target;
@@ -155,6 +261,7 @@ import {toBangla} from '@subhesadek/avro-phonetic';
       const on=enabled.get(input)!==false;
       enabled.set(input,!on);
       activeWord.delete(input);
+      closeSuggestions();
       button.setAttribute('aria-pressed',String(!on));
       button.textContent=!on?'বাংলা টাইপিং: চালু':'বাংলা টাইপিং: বন্ধ';
       input.focus({preventScroll:true});
@@ -176,7 +283,10 @@ import {toBangla} from '@subhesadek/avro-phonetic';
         }
       }
     });
-    input.addEventListener('blur',()=>activeWord.delete(input));
+    input.addEventListener('blur',()=>{activeWord.delete(input);closeSuggestions()});
+    input.setAttribute('aria-autocomplete','list');
+    input.setAttribute('aria-controls',list.id);
+    input.setAttribute('aria-expanded','false');
   }
   document.addEventListener('focusin',e=>{
     const input=e.target;
@@ -184,7 +294,21 @@ import {toBangla} from '@subhesadek/avro-phonetic';
   });
   document.addEventListener('beforeinput',handleBeforeInput,true);
   document.addEventListener('paste',handlePaste,true);
+  document.addEventListener('keydown',event=>{
+    if(!event.target?.matches?.(selector)||list.hidden||!renderedSuggestions.length)return;
+    if(event.key==='ArrowDown'||event.key==='ArrowUp'){
+      event.preventDefault();updateSelected(selectedSuggestion+(event.key==='ArrowDown'?1:-1));
+    }else if(event.key==='Enter'){
+      event.preventDefault();selectSuggestion(selectedSuggestion);
+    }else if(event.key==='Escape'){
+      event.preventDefault();closeSuggestions();
+    }else if(event.key==='Tab'||event.key==='ArrowLeft'||event.key==='ArrowRight'){
+      closeSuggestions();
+    }
+  },true);
+  document.addEventListener('scroll',()=>{if(!list.hidden)locateSuggestions()},true);
+  window.addEventListener('resize',()=>{if(!list.hidden)locateSuggestions()});
   document.addEventListener('input',handleNativeInput);
-  window.AmanahNamePhonetic=Object.freeze({transliterate:transliterateText,transliterateWord});
+  window.AmanahNamePhonetic=Object.freeze({transliterate:transliterateText,transliterateWord,suggestionsFor,conv});
 })();
 

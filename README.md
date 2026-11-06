@@ -26,10 +26,12 @@ The app uses its original browser-based Umm al-Qura Hijri calculation. Settings 
 
 The former iHadis synchronizer `src/scripts/hijri-live.js` is now intentionally disabled and does not make network requests. The legacy `api/hijri.js` endpoint is unused by the app. Calculated Hijri dates can differ from local moon-sighting announcements; users can adjust the offset in Settings. Regression tests: `node tests/modular.cjs` and `npm run test:reminders`.
 
-## Phonetic Bengali patient-name entry
+## Bengali patient-name typing — user-supplied HTML rules
 
-The patient name fields in new visit, patient edit, and new appointment forms now support live English-to-Bangla phonetic typing. A small toggle below each field can temporarily keep English typing. Typing correction, backspace, paste, Unicode Bengali editing and the existing saved-patient data flow remain supported.
+The phonetic keymap and conversion rules are adapted from the user-provided `index(2).html`. The app uses `src/scripts/phonetic-rules.mjs` for the source's **longest-match token parser**, vowel and consonant maps, conjuncts, Bengali signs, case-sensitive keys, and the original Bengali dictionary/skeleton-based spelling alternatives.
 
-The implementation uses @subhesadek/avro-phonetic v2.1.4 (MPL-2.0, https://github.com/SubheSadek/avro-phonetic), bundled locally with esbuild. It includes common Bengali patient-name spellings. This is an independent Avro-style integration; it does not copy Ridmik's proprietary APK code. The MPL-2.0 license text is included in the deployment at /licenses/avro-phonetic-MPL-2.0.txt; the upstream source is openly available at the link above. apps.zip is neither deployed nor committed.
+The live name fields `#w_name`, `#ep_name`, and `#ap_name` use `src/scripts/name-phonetic-entry.mjs`. Every item in the suggestion list is rendered **only in Bengali Unicode** — never romanized English. Staff can tap an alternative or select it with Up/Down and Enter. Original spelling is editable, and Backspace, paste, mobile IME, direct Bengali typing and the English-mode toggle remain available. Frequently used personal-name spellings remain as opt-in alternatives and default overrides.
 
-Build: npm ci && npm run build. The source lives in src/scripts/name-phonetic-entry.mjs, the CSS in src/styles/name-phonetic.css. Run node tests/modular.cjs and npm run test:reminders before release.
+All conversion takes place in the browser; no external transliteration API is called. The source is the user's own web prototype, not source code copied from the Ridmik Android APK. The previous npm phonetic package is retained in the lockfile for now but is no longer imported or used by the active name editor. See `tests/modular.cjs` for Bengali-only suggestions and keymap regression tests.
+
+Build with `npm ci && npm run build`; test with `node tests/modular.cjs` and `npm run test:reminders`.

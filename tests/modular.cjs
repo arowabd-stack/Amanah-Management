@@ -147,6 +147,31 @@ assert.equal(await nameInput.inputValue(),'মোহাম্মদ আলী');
 await nameInput.fill('নুর');
 assert.equal(await nameInput.inputValue(),'নুর');
 console.log('PHONETIC PASTE & NATIVE BANGLA EDITING OK');passed++;
+
+await nameInput.fill('');
+await nameInput.pressSequentially('masum',{delay:1});
+const banglaSuggestions=await p.locator('#amanah-name-suggestions [role="option"]').allTextContents();
+assert.ok(banglaSuggestions.length>=2,'At least two Bengali spelling suggestions');
+assert.ok(banglaSuggestions.every(t=>!/[A-Za-z]/.test(t)&&/[\u0980-\u09FF]/.test(t)),'Suggestions must be Bengali only');
+assert.ok(banglaSuggestions.includes('মাসূম'),'Alternate Bengali spelling visible');
+await p.getByRole('option',{name:'মাসূম'}).click();
+assert.equal(await nameInput.inputValue(),'মাসূম');
+assert.equal(await p.evaluate(()=>W.np.name),'মাসূম');
+await nameInput.fill('');
+await nameInput.pressSequentially('parvej',{delay:1});
+await nameInput.press('ArrowDown');
+await nameInput.press('Enter');
+assert.equal(await nameInput.inputValue(),'পার্ভেজ');
+assert.equal(await p.evaluate(()=>W.np.name),'পার্ভেজ');
+const rules=await p.evaluate(()=>({
+  candle:AmanahNamePhonetic.conv('caqqd'),
+  usage:AmanahNamePhonetic.conv('bZbohar'),
+  ocean:AmanahNamePhonetic.conv('somudro'),
+  work:AmanahNamePhonetic.conv('korrmo')
+}));
+assert.deepEqual(rules,{candle:'চাঁদ',usage:'ব্যবহার',ocean:'সমুদ্র',work:'কর্ম'});
+console.log('USER-DEFINED KEYMAP, BANGLA-ONLY SUGGESTIONS, CLICK + KEYBOARD SELECTION OK');passed++;
+
 await p.goto('https://qa.amanah.test/patient/?id=p1');
 await p.evaluate(()=>{if(!pById('p1'))D.patients.push({id:'p1',name:'Test patient',mobile:'01712345678',age:'32',sex:'পুরুষ',address:'Test'});editPatient('p1')});
 await p.locator('#ep_name').fill('');

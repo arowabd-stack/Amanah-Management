@@ -7,3 +7,26 @@
 }
 .amanah-name-mode[aria-pressed="false"]{background:transparent;color:var(--mute,#718093)}
 .amanah-name-mode:focus-visible{outline:2px solid var(--navy2,#2f72ab);outline-offset:2px}
+
+/* Bangla-only word suggestions from the user's phonetic web prototype. */
+.amanah-name-suggestions{
+  position:fixed;z-index:130;display:flex;align-items:center;gap:6px;
+  overflow-x:auto;max-width:calc(100vw - 16px);padding:8px;
+  background:var(--card,#fff);border:1px solid var(--line,#dfe6eb);
+  border-radius:10px;box-shadow:0 10px 28px rgba(11,34,55,.16);
+  scrollbar-width:thin;overscroll-behavior:contain;
+}
+.amanah-name-suggestions[hidden]{display:none}
+.amanah-name-suggestion{
+  display:inline-flex;align-items:center;justify-content:center;
+  flex:0 0 auto;max-width:180px;min-height:35px;white-space:nowrap;
+  padding:6px 12px;border:1px solid var(--line,#dfe6eb);
+  border-radius:9px;font:inherit;font-size:14px;font-weight:600;
+  color:var(--ink,#173246);background:var(--card,#fff);cursor:pointer;
+}
+.amanah-name-suggestion[aria-selected="true"]{
+  background:var(--sky,#edf6fa);border-color:var(--navy2,#2f72ab);
+  color:var(--navy,#254661);
+}
+.amanah-name-suggestion:hover{background:var(--sky,#edf6fa)}
+.amanah-name-suggestion:focus-visible{outline:2px solid var(--navy2,#2f72ab);outline-offset:2px}
