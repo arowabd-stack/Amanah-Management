@@ -217,6 +217,36 @@ assert.equal(await p.locator('#ap_name').inputValue(),await p.evaluate(()=>Amana
 await p.evaluate(()=>closeModal());
 console.log('PHONETIC PATIENT EDIT AND APPOINTMENT FIELDS OK');passed++;
 
+// Live typing for the newly supplied long-form Banglish examples.
+await p.goto('https://qa.amanah.test/new-visit/');
+const naturalName=p.locator('#w_name');
+await naturalName.focus();
+await naturalName.pressSequentially('shobche boR nodir',{delay:1});
+assert.equal(await naturalName.inputValue(),'সবচেয়ে বড় নদীর');
+await naturalName.fill('');
+await naturalName.pressSequentially('e ai ese',{delay:1});
+assert.equal(await naturalName.inputValue(),'এআই এসে');
+await naturalName.fill('');
+await naturalName.pressSequentially('koSHT',{delay:1});
+assert.equal(await naturalName.inputValue(),'কষ্ট');
+await naturalName.fill('');
+await naturalName.pressSequentially('kiborD',{delay:1});
+assert.equal(await naturalName.inputValue(),'কিবোর্ড');
+await naturalName.fill('');
+await naturalName.pressSequentially('apDeT',{delay:1});
+assert.equal(await naturalName.inputValue(),'আপডেট');
+console.log('SECOND REAL PARAGRAPH LIVE PHONETIC NAME TYPING OK');passed++;
+const firstSpeech='amaderke keno eivabe asote hoil eiTa niye ki kew/keu kotha bolbana. ar ami chai sobaike niye ekta darun kichu korte tobe er jonno amake kichu korai lagbe. tar age zara ekkhono bose ache plij tara daRiye jan. ami kintu apnader kosto die chaina tobuo kosto hoye jacce apnader. kkhoma sundor drriShTite dekhben shobai. assalamuyalaikum';
+const secondSpeech='bangladesher shobche boR nodir nam ki janO, asole amora chai shobai shob januk , er jonno amader koSHT kora lagt onek, kintu ekon e ai ese amader onek shohoj kore dilo. mashaalaah alhamdulillah, ami likhtechi bangla ridmik kiborD diye baT onek smuth mashallah aro apDeT lagbe tobe';
+const output=await p.evaluate(([first,second])=>[AmanahNamePhonetic.convertText(first),AmanahNamePhonetic.convertText(second)],[firstSpeech,secondSpeech]);
+assert.ok(output[0].includes('আমাদেরকে কেন এভাবে'));
+assert.ok(output[0].includes('দাঁড়িয়ে যান'));
+assert.ok(output[1].includes('বাংলাদেশের সবচেয়ে বড় নদীর'));
+assert.ok(output[1].includes('এআই এসে'));
+assert.ok(output[1].includes('রিদমিক কিবোর্ড'));
+assert.ok(output[1].includes('স্মুথ মাশাআল্লাহ আরও আপডেট'));
+console.log('BOTH REAL BANGLISH PARAGRAPHS VALIDATED IN BROWSER OK');passed++;
+
 assert.ok(writes.every(w=>Number.isInteger(w.state.settings.hijriOffset)&&Math.abs(w.state.settings.hijriOffset)<=2),'Only valid hijri offsets saved during QA');
 assert.deepEqual(errs,[],'browser page errors');
 console.log('ALL '+passed+' PAGE/WIZARD CHECKS PASSED');

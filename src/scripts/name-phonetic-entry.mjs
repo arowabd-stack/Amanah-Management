@@ -6,6 +6,7 @@
  */
 import {conv,suggest} from './phonetic-rules.mjs';
 import {grammarAutoFix} from './phonetic-autofix.mjs';
+import {contextualWordFix} from './phonetic-natural.mjs';
 
 (function(){
   'use strict';
@@ -28,9 +29,12 @@ import {grammarAutoFix} from './phonetic-autofix.mjs';
   // This must be equivalent to the supplied HTML:
   // inp.value.split('\n').map(l=>l.replace(/[A-Za-z]+/g,cv)).join('\n')
   // when no explicit suggestion was selected.
-  const renderedWord=word=>grammarAutoFix(word)??conv(word);
+  const renderedWord=(word,prefix='')=>contextualWordFix(word,prefix)??grammarAutoFix(word)??conv(word);
+  // Only this explicit two-token acronym is joined; other word boundaries stay untouched.
+  const normalizeKnownPhrase=line=>line.replace(/এ আই(?=\s|$|[.,!?])/g,'এআই');
   const convertText=text=>String(text).split('\n')
-    .map(line=>line.replace(/[A-Za-z]+/g,word=>renderedWord(word))).join('\n');
+    .map(line=>normalizeKnownPhrase(line.replace(/[A-Za-z]+/g,
+      (word,index)=>renderedWord(word,line.slice(0,index))))).join('\n');
 
   function emit(input){
     emitting=true;
@@ -108,7 +112,7 @@ import {grammarAutoFix} from './phonetic-autofix.mjs';
   }
   function renderWord(input,start,end,raw){
     const s=state.get(input);
-    const rendered=renderedWord(raw); // Original conv() except whitelisted grammar words.
+    const rendered=renderedWord(raw,input.value.slice(0,start)); // Exact conv() except high-confidence grammar/context.
     input.setRangeText(rendered,start,end,'end');
     s.draft=raw?{start,raw,rendered,selected:false}:null;
     emit(input);
@@ -120,7 +124,7 @@ import {grammarAutoFix} from './phonetic-autofix.mjs';
     if(!d||typeof value!=='string')return;
     input.setRangeText(value,d.start,d.start+d.rendered.length,'end');
     d.rendered=value;
-    d.selected=(value!==renderedWord(d.raw));
+    d.selected=(value!==renderedWord(d.raw,input.value.slice(0,d.start)));
     emit(input);
     stopSuggestions();
     input.focus({preventScroll:true});
@@ -128,8 +132,9 @@ import {grammarAutoFix} from './phonetic-autofix.mjs';
   function resetChoice(input){
     const d=draftAtCaret(input);
     if(!d)return;
-    input.setRangeText(renderedWord(d.raw),d.start,d.start+d.rendered.length,'end');
-    d.rendered=renderedWord(d.raw);
+    const original=renderedWord(d.raw,input.value.slice(0,d.start));
+    input.setRangeText(original,d.start,d.start+d.rendered.length,'end');
+    d.rendered=original;
     d.selected=false;
     emit(input);
     refresh(input);
@@ -166,7 +171,13 @@ import {grammarAutoFix} from './phonetic-autofix.mjs';
         return;
       }
       // A space or punctuation commits the current word unchanged.
+      // When the final two words are the Bangla spelling of 'e ai',
+      // join that recognized acronym only after its word boundary.
       finishWord(input);
+      if(start===end&&/[\s.,!?]/.test(data)&&input.value.slice(0,start).endsWith('এ আই')){
+        input.setRangeText('এআই',start-4,start,'end');
+        emit(input);
+      }
       return;
     }
     if(event.inputType.startsWith('delete')||event.inputType.startsWith('insert'))finishWord(input);

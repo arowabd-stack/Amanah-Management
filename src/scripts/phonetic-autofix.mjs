@@ -3,6 +3,8 @@
  * Only whole Latin words match. Every other word uses conv() unchanged.
  * Do not map arbitrary phonetic chunks or patient names.
  */
+import {naturalWordFix} from './phonetic-natural.mjs';
+
 const stems=Object.freeze({
   bol:'বল', kor:'কর', dekh:'দেখ', likh:'লিখ', por:'পড়',
   shun:'শুন', bujh:'বুঝ', ash:'আস', thak:'থাক', shikh:'শিখ',
@@ -63,6 +65,8 @@ function grammarAutoFix(word){
   const raw=String(word||'');
   if(!/^[A-Za-z]+$/.test(raw))return null;
   const key=raw.toLowerCase();
+  const natural=naturalWordFix(raw);
+  if(natural!==null)return natural;
   if(Object.prototype.hasOwnProperty.call(common,key))return common[key];
   for(const [stem,bangla] of Object.entries(stems)){
     if(!key.startsWith(stem))continue;
