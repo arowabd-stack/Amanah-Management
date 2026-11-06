@@ -10,7 +10,7 @@ const fixture={
 (async()=>{
 const browser=await chromium.launch({headless:true});
 const c=await browser.newContext();
-const p=await c.newPage(),errs=[],writes=[];
+const p=await c.newPage(),errs=[],writes=[];p.setDefaultTimeout(7000);
 p.on('pageerror',e=>errs.push(e.message));
 await c.route('**/*',async route=>{
  const req=route.request(),url=new URL(req.url());
@@ -86,6 +86,7 @@ assert.ok(lookup.surma.includes('সুরমা, সুনামগঞ্জ �
 assert.ok(lookup.surma.includes('সুরমা, দোয়ারাবাজার, সুনামগঞ্জ'));
 assert.ok(lookup.purba.includes('পূর্ব পাগলা, শান্তিগঞ্জ, সুনামগঞ্জ'));
 console.log('BENGALI/ENGLISH ALIAS SEARCH OK');passed++;
+await p.locator('#wizardSteps [data-step="0"]').click();
 await p.locator('#w_addr').fill('Kathoir');
 await p.locator('#amanah-address-options [role="option"]').first().click();
 assert.equal(await p.locator('#w_addr').inputValue(),kathoir);
@@ -96,7 +97,7 @@ await p.locator('#w_addr').press('Enter');
 assert.equal(await p.locator('#w_addr').inputValue(),'ষোলঘর, সুনামগঞ্জ সদর, সুনামগঞ্জ');
 console.log('MOUSE & KEYBOARD SELECTION OK');passed++;
 await p.goto('https://qa.amanah.test/patient/?id=p1');
-await p.evaluate(()=>editPatient('p1'));
+await p.evaluate(()=>{if(!pById('p1'))D.patients.push({id:'p1',name:'Test patient',mobile:'01712345678',age:'32',sex:'পুরুষ',address:'Test'});editPatient('p1')});
 await p.locator('#ep_addr').fill('Mongalkata');
 await p.locator('#amanah-address-options [role="option"]').first().click();
 assert.equal(await p.locator('#ep_addr').inputValue(),'মঙ্গলকাটা, জাহাঙ্গীরনগর, সুনামগঞ্জ সদর, সুনামগঞ্জ');
@@ -107,4 +108,4 @@ assert.equal(writes.length,0,'No clinic writes during QA');
 assert.deepEqual(errs,[],'browser page errors');
 console.log('ALL '+passed+' PAGE/WIZARD CHECKS PASSED');
 await browser.close();
-})().catch(e=>{console.error(e);process.exitCode=1;});
+})().catch(e=>{console.error(e);process.exit(1);});
