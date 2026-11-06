@@ -25,7 +25,7 @@
   for(const shift of [0,-1,1,-2,2]){
    const candidate=shiftDate(date,shift);
    const h=candidate?calculatedHijri(candidate):null;
-   if(h&&h.day===live.day&&h.month===live.month&&h.year===live.year)return shift;
+   if(h&&h.day===live.day&&h.month===live.month)return shift;
   }
   return null;
  }
