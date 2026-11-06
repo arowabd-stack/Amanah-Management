@@ -9,9 +9,11 @@
     "test:reminders": "node build.mjs && node tests/reminders.cjs"
   },
   "dependencies": {
+    "@subhesadek/avro-phonetic": "^2.1.4",
     "@vercel/blob": "2.7.0"
   },
   "devDependencies": {
+    "esbuild": "0.25.12",
     "playwright": "1.65.0"
   }
 }
