@@ -119,72 +119,103 @@ assert.equal(await p.locator('#ep_addr').inputValue(),'মঙ্গলকাট�
 await p.evaluate(()=>closeModal());
 console.log('PATIENT EDIT ADDRESS SUGGESTIONS OK');passed++;
 
-// Phonetic Banglish to Bangla patient names, entered through actual keyboard events.
+// The user's uploaded HTML converter is authoritative except for common grammar words.
 await p.goto('https://qa.amanah.test/new-visit/');
 const nameInput=p.locator('#w_name');
 await nameInput.focus();
 await nameInput.pressSequentially('Masum Parvej',{delay:1});
-assert.equal(await nameInput.inputValue(),'মাসুম পারভেজ');
-assert.equal(await p.evaluate(()=>W.np.name),'মাসুম পারভেজ');
-console.log('PHONETIC LIVE ENGLISH -> BANGLA & STATE BINDING OK');passed++;
+const exactName=await p.evaluate(()=>AmanahNamePhonetic.conv('Masum')+' '+AmanahNamePhonetic.conv('Parvej'));
+assert.equal(await nameInput.inputValue(),exactName);
+assert.equal(await p.evaluate(()=>W.np.name),exactName);
+assert.equal(exactName,'মাসুম পার্ভেজ','Preserve capitalization-sensitive user keymap, without name overrides');
+console.log('UPLOADED HTML EXACT OUTPUT (NO NAME OVERRIDES) OK');passed++;
 await nameInput.press('Backspace');
-assert.notEqual(await nameInput.inputValue(),'মাসুম পারভেজ');
+assert.notEqual(await nameInput.inputValue(),exactName);
 await nameInput.pressSequentially('j',{delay:1});
-assert.equal(await nameInput.inputValue(),'মাসুম পারভেজ');
+assert.equal(await nameInput.inputValue(),exactName);
 await p.locator('.amanah-name-mode').click();
 await nameInput.pressSequentially(' Khan',{delay:1});
-assert.equal(await nameInput.inputValue(),'মাসুম পারভেজ Khan');
+assert.equal(await nameInput.inputValue(),exactName+' Khan');
 await p.locator('.amanah-name-mode').click();
 await nameInput.pressSequentially(' Rahim',{delay:1});
-assert.equal(await nameInput.inputValue(),'মাসুম পারভেজ Khan রহিম');
-console.log('PHONETIC BACKSPACE / ENGLISH TOGGLE OK');passed++;
+assert.equal(await nameInput.inputValue(),exactName+' Khan '+await p.evaluate(()=>AmanahNamePhonetic.conv('Rahim')));
+console.log('BACKSPACE AND ENGLISH MODE WITHOUT AUTO-OVERRIDE OK');passed++;
 await nameInput.fill('');
 await nameInput.evaluate(el=>{
  const dt=new DataTransfer();dt.setData('text/plain','Mohammad Ali');
  el.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:dt}));
 });
-assert.equal(await nameInput.inputValue(),'মোহাম্মদ আলী');
+assert.equal(await nameInput.inputValue(),await p.evaluate(()=>AmanahNamePhonetic.convertText('Mohammad Ali')));
 await nameInput.fill('নুর');
 assert.equal(await nameInput.inputValue(),'নুর');
-console.log('PHONETIC PASTE & NATIVE BANGLA EDITING OK');passed++;
-
+console.log('PASTE AND DIRECT BENGALI EDITING OK');passed++;
+const grammarCases={
+ bolchen:'বলছেন',bolchi:'বলছি',bolche:'বলছে',bolchilen:'বলছিলেন',
+ korchen:'করছেন',korchi:'করছি',dekhchen:'দেখছেন',
+ likhchen:'লিখছেন',ashchen:'আসছেন',jacchen:'যাচ্ছেন',
+ hoyeche:'হয়েছে',acchen:'আছেন',onek:'অনেক',ektu:'একটু'
+};
+for(const [roman,desired] of Object.entries(grammarCases)){
+ await nameInput.fill('');
+ await nameInput.pressSequentially(roman,{delay:1});
+ assert.equal(await nameInput.inputValue(),desired,roman+' grammar auto fix');
+ assert.equal(await p.evaluate(()=>W.np.name),desired,'Form binding '+roman);
+}
+assert.equal(await p.evaluate(()=>AmanahNamePhonetic.conv('bolchen')),'বল্ছেন',
+  'Keep original converter unchanged; auto-fix is separate');
+assert.equal(await p.evaluate(()=>AmanahNamePhonetic.convertText('ami bolchen Masum')),
+  'আমি বলছেন মাসুম','Auto-fix only whitelisted grammar words');
+console.log('WHITELISTED COMMON GRAMMAR WORD AUTOFIX OK');passed++;
 await nameInput.fill('');
-await nameInput.pressSequentially('masum',{delay:1});
-const banglaSuggestions=await p.locator('#amanah-name-suggestions [role="option"]').allTextContents();
-assert.ok(banglaSuggestions.length>=2,'At least two Bengali spelling suggestions');
-assert.ok(banglaSuggestions.every(t=>!/[A-Za-z]/.test(t)&&/[\u0980-\u09FF]/.test(t)),'Suggestions must be Bengali only');
-assert.ok(banglaSuggestions.includes('মাসূম'),'Alternate Bengali spelling visible');
-await p.getByRole('option',{name:'মাসূম'}).click();
-assert.equal(await nameInput.inputValue(),'মাসূম');
-assert.equal(await p.evaluate(()=>W.np.name),'মাসূম');
+await nameInput.pressSequentially('bangla',{delay:1});
+assert.equal(await nameInput.inputValue(),'বাংলা');
+const expectedAlternatives=await p.evaluate(()=>AmanahNamePhonetic.suggest('বাংলা').filter(x=>x!=='বাংলা').slice(0,4));
+const currentOptions=await p.locator('#amanah-name-suggestions [role="option"]').allTextContents();
+assert.deepEqual(currentOptions,['বাংলা',...expectedAlternatives]);
+assert.ok(expectedAlternatives.length>0);
+assert.ok(currentOptions.every(t=>!/[A-Za-z]/.test(t)));
+assert.equal(await nameInput.inputValue(),'বাংলা','Suggestion display cannot change base text');
+await p.locator('#amanah-name-suggestions [role="option"]').nth(1).click();
+assert.equal(await nameInput.inputValue(),expectedAlternatives[0]);
+assert.equal(await p.evaluate(()=>W.np.name),expectedAlternatives[0]);
+console.log('UPLOADED HTML SUGGESTIONS OPTIONAL MOUSE SELECTION OK');passed++;
 await nameInput.fill('');
-await nameInput.pressSequentially('parvej',{delay:1});
-await nameInput.press('ArrowDown');
+await nameInput.pressSequentially('bangla',{delay:1});
+await nameInput.press('ArrowRight');
+assert.equal(await nameInput.inputValue(),'বাংলা','Highlighting must not change the actual name');
 await nameInput.press('Enter');
-assert.equal(await nameInput.inputValue(),'পার্ভেজ');
-assert.equal(await p.evaluate(()=>W.np.name),'পার্ভেজ');
-const rules=await p.evaluate(()=>({
-  candle:AmanahNamePhonetic.conv('caqqd'),
-  usage:AmanahNamePhonetic.conv('bZbohar'),
-  ocean:AmanahNamePhonetic.conv('somudro'),
-  work:AmanahNamePhonetic.conv('korrmo')
+assert.equal(await nameInput.inputValue(),expectedAlternatives[0]);
+await nameInput.fill('');
+await nameInput.pressSequentially('bolchen ',{delay:1});
+assert.equal(await nameInput.inputValue(),'বলছেন ');
+console.log('OPTIONAL KEYBOARD SUGGESTIONS AND SPACE COMMIT OK');passed++;
+const sourceKeymap=await p.evaluate(()=>({
+ candle:AmanahNamePhonetic.conv('caqqd'),usage:AmanahNamePhonetic.conv('bZbohar'),
+ ocean:AmanahNamePhonetic.conv('somudro'),work:AmanahNamePhonetic.conv('korrmo'),
+ t:AmanahNamePhonetic.conv('t'),T:AmanahNamePhonetic.conv('T'),
+ example:AmanahNamePhonetic.convertText('ami bangla likhte pari')
 }));
-assert.deepEqual(rules,{candle:'চাঁদ',usage:'ব্যবহার',ocean:'সমুদ্র',work:'কর্ম'});
-console.log('USER-DEFINED KEYMAP, BANGLA-ONLY SUGGESTIONS, CLICK + KEYBOARD SELECTION OK');passed++;
-
+assert.equal(sourceKeymap.candle,'চাঁদ');
+assert.equal(sourceKeymap.usage,'ব্যবহার');
+assert.equal(sourceKeymap.ocean,'সমুদ্র');
+assert.equal(sourceKeymap.work,'কর্ম');
+assert.equal(sourceKeymap.t,'ত');
+assert.equal(sourceKeymap.T,'ট');
+assert.equal(sourceKeymap.example,'আমি বাংলা লিখতে পারি');
+console.log('USER KEYMAP / LIGATURE / CASE-SENSITIVITY OK');passed++;
 await p.goto('https://qa.amanah.test/patient/?id=p1');
 await p.evaluate(()=>{if(!pById('p1'))D.patients.push({id:'p1',name:'Test patient',mobile:'01712345678',age:'32',sex:'পুরুষ',address:'Test'});editPatient('p1')});
 await p.locator('#ep_name').fill('');
 await p.locator('#ep_name').pressSequentially('Nur Islam',{delay:1});
-assert.equal(await p.locator('#ep_name').inputValue(),'নুর ইসলাম');
+const editExpected=await p.evaluate(()=>AmanahNamePhonetic.convertText('Nur Islam'));
+assert.equal(await p.locator('#ep_name').inputValue(),editExpected);
 await p.evaluate(()=>closeModal());
-console.log('PHONETIC PATIENT EDIT NAME OK');passed++;
 await p.goto('https://qa.amanah.test/appointments/');
 await p.evaluate(()=>openAppt(null,null,null));
 await p.locator('#ap_name').pressSequentially('Md Hasan',{delay:1});
-assert.equal(await p.locator('#ap_name').inputValue(),'মোঃ হাসান');
+assert.equal(await p.locator('#ap_name').inputValue(),await p.evaluate(()=>AmanahNamePhonetic.convertText('Md Hasan')));
 await p.evaluate(()=>closeModal());
-console.log('PHONETIC APPOINTMENT NAME OK');passed++;
+console.log('PHONETIC PATIENT EDIT AND APPOINTMENT FIELDS OK');passed++;
 
 assert.ok(writes.every(w=>Number.isInteger(w.state.settings.hijriOffset)&&Math.abs(w.state.settings.hijriOffset)<=2),'Only valid hijri offsets saved during QA');
 assert.deepEqual(errs,[],'browser page errors');

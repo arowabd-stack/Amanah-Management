@@ -1,314 +1,276 @@
 /*
- * Amanah Center name input: phonetic Banglish -> Bangla Unicode.
- * Keymap, conversion rules and suggestion heuristics are taken from the user's
- * own Ridmik-style HTML prototype. All conversion is browser-local.
+ * Exact-output Bangla name editor for Amanah Center.
+ * All ordinary words use conv() exactly as in the uploaded HTML.
+ * Only an explicit whitelist of everyday grammar words receives auto-fix.
+ * Suggestions still apply ONLY if the user selects one.
  */
-import {conv,suggest as userSuggest} from './phonetic-rules.mjs';
+import {conv,suggest} from './phonetic-rules.mjs';
+import {grammarAutoFix} from './phonetic-autofix.mjs';
 
 (function(){
   'use strict';
   const selector='#w_name,#ep_name,#ap_name';
-  // Clinical name spellings: automatic corrections for frequent local names.
-  // Staff can always edit the final Unicode Bangla text directly.
-  const overrides=Object.freeze({
-    masum:'মাসুম',parvej:'পারভেজ',parvez:'পারভেজ',parbeej:'পারভেজ',
-    rahim:'রহিম',rohim:'রহিম',rahman:'রহমান',rohman:'রহমান',
-    abdul:'আব্দুল',abdur:'আব্দুর',abdullah:'আব্দুল্লাহ',
-    md:'মোঃ',moh:'মোঃ',mohammad:'মোহাম্মদ',mohammed:'মোহাম্মদ',muhammad:'মুহাম্মদ',
-    mst:'মোছাঃ',most:'মোছাঃ',mostafa:'মোস্তফা',
-    hossain:'হোসেন',hussain:'হোসেন',hosain:'হোসেন',hossen:'হোসেন',
-    hosen:'হোসেন',hossein:'হোসেন',
-    hasan:'হাসান',hasanul:'হাসানুল',hassan:'হাসান',
-    husain:'হোসেন',sadia:'সাদিয়া',sadiya:'সাদিয়া',
-    nur:'নুর',noor:'নূর',nure:'নূরে',islam:'ইসলাম',
-    jannat:'জান্নাত',jannatul:'জান্নাতুল',ara:'আরা',
-    fatema:'ফাতেমা',fatima:'ফাতিমা',fatem:'ফাতেমা',
-    tanvir:'তানভীর',tanbir:'তানভীর',tanveer:'তানভীর',tania:'তানিয়া',
-    siddique:'সিদ্দিক',siddiq:'সিদ্দিক',siddik:'সিদ্দিক',siddika:'সিদ্দিকা',
-    ali:'আলী',aly:'আলী',alam:'আলম',alom:'আলম',
-    sumon:'সুমন',suman:'সুমন',shuvo:'শুভ',shubho:'শুভ',
-    sahadat:'শাহাদাত',shahadat:'শাহাদাত',shohag:'সোহাগ',sohag:'সোহাগ',
-    sajib:'সজীব',sajeev:'সজীব',sojib:'সজীব',sajeeb:'সজীব',
-    rubel:'রুবেল',mamun:'মামুন',mahmud:'মাহমুদ',mahmuda:'মাহমুদা',
-    sharif:'শরীফ',shorif:'শরীফ',shariful:'শরীফুল',
-    shafiq:'শফিক',shafiqul:'শফিকুল',shafik:'শফিক',
-    kabir:'কবির',khan:'খান',khatun:'খাতুন',begum:'বেগম',
-    molla:'মোল্লা',mullah:'মোল্লা',
-    shahin:'শাহীন',shaheen:'শাহীন',shahjahan:'শাহজাহান',
-    jahangir:'জাহাঙ্গীর',ziaur:'জিয়াউর',zia:'জিয়া',sultan:'সুলতান',
-    amin:'আমিন',amina:'আমিনা',mim:'মিম',mina:'মিনা',
-    salma:'সালমা',samiya:'সামিয়া',samia:'সামিয়া',
-    robiul:'রবিউল',robi:'রবি',rakib:'রাকিব',rakiib:'রাকিব',
-    rayhan:'রায়হান',raihan:'রায়হান',rakibul:'রাকিবুল',
-    imran:'ইমরান',arif:'আরিফ',ariful:'আরিফুল',
-    shihab:'শিহাব',nazmul:'নাজমুল',nazrul:'নজরুল',
-    akter:'আক্তার',akhtar:'আখতার',aktera:'আক্তারা',
-    sadnan:'সাদনান',sadman:'সাদমান',sajjad:'সাজ্জাদ'
-  });
+  const state=new WeakMap();
+  const wired=new WeakSet();
+  let emitting=false;
+  let owner=null;
+  let highlighted=-1;
+  let options=[];
 
-  function transliterateWord(raw){
-    if(!/^[A-Za-z]+$/.test(raw))return raw;
-    const lower=raw.toLowerCase();
-    return overrides[lower]||conv(raw);
+  const popup=document.createElement('div');
+  popup.id='amanah-name-suggestions';
+  popup.className='amanah-name-suggestions';
+  popup.hidden=true;
+  popup.setAttribute('role','listbox');
+  popup.setAttribute('aria-label','বাংলা বানান সাজেশন');
+  document.body.appendChild(popup);
+
+  // This must be equivalent to the supplied HTML:
+  // inp.value.split('\n').map(l=>l.replace(/[A-Za-z]+/g,cv)).join('\n')
+  // when no explicit suggestion was selected.
+  const renderedWord=word=>grammarAutoFix(word)??conv(word);
+  const convertText=text=>String(text).split('\n')
+    .map(line=>line.replace(/[A-Za-z]+/g,word=>renderedWord(word))).join('\n');
+
+  function emit(input){
+    emitting=true;
+    try{input.dispatchEvent(new Event('input',{bubbles:true}))}
+    finally{emitting=false}
   }
-  function transliterateText(text){
-    return String(text).replace(/[A-Za-z]+/g,word=>transliterateWord(word));
+  function stopSuggestions(){
+    popup.hidden=true;
+    popup.replaceChildren();
+    highlighted=-1;
+    options=[];
+    owner?.setAttribute('aria-expanded','false');
+    owner?.removeAttribute('aria-activedescendant');
   }
-  // Every visible suggestion must be a Bengali Unicode string, never Romanized English.
-  // The initial suggestion preserves the field's current output; following entries
-  // come from the user's own phonetic engine and skeleton/letter-alternation rules.
-  const nameVariants=Object.freeze({
-    masum:['মাসুম','মাসূম'],parvej:['পারভেজ','পার্ভেজ'],parvez:['পারভেজ','পার্ভেজ'],
-    rahim:['রহিম','রাহিম'],hossain:['হোসেন','হোসাইন','হুসাইন'],
-    hussain:['হোসেন','হুসাইন'],nur:['নুর','নূর'],noor:['নূর','নুর'],
-    md:['মোঃ','মো.','মোহাম্মদ'],mohammad:['মোহাম্মদ','মুহাম্মদ'],
-    ali:['আলী','আলি'],hasan:['হাসান','হাছান'],
-    parbeej:['পারভেজ'],mim:['মিম'],fatema:['ফাতেমা','ফাতিমা'],
-    sadia:['সাদিয়া','সাদিয়া'],karim:['করিম','কারিম']
-  });
-  function suggestionsFor(raw){
-    const bangla=transliterateWord(raw),natural=conv(raw);
-    const options=[bangla,...(nameVariants[raw.toLowerCase()]||[]),natural];
-    if(raw!==raw.toLowerCase())options.push(conv(raw.toLowerCase()));
-    options.push(...userSuggest(natural));
-    const unique=[];
-    for(const word of options){
-      if(typeof word==='string'&&/[ঀ-৿]/u.test(word)&&!/[A-Za-z]/.test(word)&&!unique.includes(word)){
-        unique.push(word);
-      }
-      if(unique.length===5)break;
+  function finishWord(input){
+    const s=state.get(input);
+    if(s)s.draft=null;
+    stopSuggestions();
+  }
+  function draftAtCaret(input){
+    const s=state.get(input),d=s?.draft;
+    if(!s?.enabled||!d||input.selectionStart!==input.selectionEnd)return null;
+    const end=d.start+d.rendered.length;
+    if(input.selectionStart!==end||input.value.slice(d.start,end)!==d.rendered){
+      finishWord(input);
+      return null;
     }
-    return unique;
+    return d;
   }
-  const list=document.createElement('div');
-  list.id='amanah-name-suggestions';
-  list.className='amanah-name-suggestions';
-  list.setAttribute('role','listbox');
-  list.setAttribute('aria-label','বাংলা নামের সাজেশন');
-  list.hidden=true;
-  document.body.appendChild(list);
-  let suggestionInput=null,selectedSuggestion=0,renderedSuggestions=[];
-  function closeSuggestions(){
-    list.hidden=true;
-    list.replaceChildren();
-    renderedSuggestions=[];
-    selectedSuggestion=0;
-    if(suggestionInput){
-      suggestionInput.setAttribute('aria-expanded','false');
-      suggestionInput.removeAttribute('aria-activedescendant');
-    }
+  function position(){
+    if(popup.hidden||!owner?.isConnected)return;
+    const r=owner.getBoundingClientRect();
+    const width=Math.min(Math.max(r.width,190),window.innerWidth-16);
+    popup.style.width=width+'px';
+    popup.style.left=Math.max(8,Math.min(r.left,window.innerWidth-width-8))+'px';
+    const height=Math.min(popup.scrollHeight,190);
+    const above=r.top>height+10&&window.innerHeight-r.bottom<height+15;
+    popup.style.top=(above?Math.max(8,r.top-height-5):r.bottom+5)+'px';
   }
-  function locateSuggestions(){
-    if(list.hidden||!suggestionInput?.isConnected)return;
-    const r=suggestionInput.getBoundingClientRect();
-    const width=Math.max(180,Math.min(window.innerWidth-16,r.width));
-    list.style.width=width+'px';
-    list.style.left=Math.max(8,Math.min(r.left,window.innerWidth-width-8))+'px';
-    const height=list.offsetHeight;
-    list.style.top=(window.innerHeight-r.bottom<height+10&&r.top>height+10?
-      r.top-height-6:r.bottom+6)+'px';
-  }
-  function updateSelected(index){
-    if(!renderedSuggestions.length)return;
-    selectedSuggestion=(index+renderedSuggestions.length)%renderedSuggestions.length;
-    list.querySelectorAll('[role="option"]').forEach((node,i)=>{
-      const selected=i===selectedSuggestion;
-      node.setAttribute('aria-selected',String(selected));
-      if(selected){
-        suggestionInput?.setAttribute('aria-activedescendant',node.id);
-        node.scrollIntoView({block:'nearest',inline:'nearest'});
-      }
-    });
-  }
-  function selectSuggestion(index){
-    const input=suggestionInput;
-    if(!input?.isConnected||!renderedSuggestions[index])return;
-    const current=validWord(input);
-    if(!current)return;
-    const value=renderedSuggestions[index];
-    input.setRangeText(value,current.start,current.start+current.bangla.length,'end');
-    activeWord.set(input,{...current,bangla:value});
-    notify(input);
-    closeSuggestions();
-    input.focus({preventScroll:true});
-  }
-  function showSuggestions(input){
-    suggestionInput=input;
-    const current=validWord(input);
-    if(!current||!current.raw){closeSuggestions();return}
-    renderedSuggestions=suggestionsFor(current.raw);
-    list.replaceChildren();
-    if(!renderedSuggestions.length){closeSuggestions();return}
-    renderedSuggestions.forEach((value,i)=>{
+  function refresh(input){
+    owner=input;
+    const d=draftAtCaret(input);
+    if(!d){stopSuggestions();return}
+    const base=d.rendered; // Exactly conv(raw), unless the user explicitly selected a spelling.
+    const alternative=suggest(conv(d.raw)).filter(value=>value!==base).slice(0,4);
+    options=[base,...alternative];
+    popup.replaceChildren();
+    options.forEach((value,index)=>{
       const button=document.createElement('button');
       button.type='button';
-      button.className='amanah-name-suggestion';
+      button.className='amanah-name-suggestion'+(index===0?' current':'');
+      button.id='amanah-name-suggestion-'+index;
       button.setAttribute('role','option');
-      button.setAttribute('aria-selected',String(i===0));
-      button.id='amanah-name-suggestion-'+i;
-      // Intentionally Bengali only, including all accessibility-visible option labels.
+      button.setAttribute('aria-selected',String(index===0));
+      // Text is always Bangla Unicode; no Roman input or English labels in suggestions.
       button.textContent=value;
-      button.addEventListener('pointerdown',event=>event.preventDefault());
-      button.addEventListener('click',()=>selectSuggestion(i));
-      list.appendChild(button);
+      button.addEventListener('pointerdown',e=>e.preventDefault());
+      button.addEventListener('click',()=>pick(input,index));
+      popup.appendChild(button);
     });
-    selectedSuggestion=0;
-    list.hidden=false;
+    highlighted=-1;
+    popup.hidden=false;
     input.setAttribute('aria-expanded','true');
-    input.setAttribute('aria-activedescendant','amanah-name-suggestion-0');
-    locateSuggestions();
+    position();
   }
-  const enabled=new WeakMap(),activeWord=new WeakMap(),attached=new WeakSet();
-  let emitting=false;
-
-  function notify(input){
-    emitting=true;
-    input.dispatchEvent(new Event('input',{bubbles:true}));
-    emitting=false;
+  function setHighlight(index){
+    if(!options.length)return;
+    highlighted=Math.max(-1,Math.min(options.length-2,index));
+    popup.querySelectorAll('[role="option"]').forEach((el,i)=>{
+      const on=i===highlighted+1;
+      el.classList.toggle('highlight',on);
+      el.setAttribute('aria-selected',String(on||(highlighted===-1&&i===0)));
+      if(on)owner?.setAttribute('aria-activedescendant',el.id);
+    });
   }
-  function renderPart(input,start,end,raw,remember){
-    const bangla=transliterateText(raw);
-    input.setRangeText(bangla,start,end,'end');
-    if(remember&&/^[A-Za-z]+$/.test(raw)){
-      activeWord.set(input,{start,raw,bangla});
-    }else{
-      activeWord.delete(input);
-    }
-    notify(input);
-    if(remember&&raw)showSuggestions(input);else closeSuggestions();
+  function renderWord(input,start,end,raw){
+    const s=state.get(input);
+    const rendered=renderedWord(raw); // Original conv() except whitelisted grammar words.
+    input.setRangeText(rendered,start,end,'end');
+    s.draft=raw?{start,raw,rendered,selected:false}:null;
+    emit(input);
+    if(raw)refresh(input);else stopSuggestions();
   }
-  function validWord(input){
-    const current=activeWord.get(input);
-    if(!current||input.selectionStart===null||input.selectionStart!==input.selectionEnd)return null;
-    const end=current.start+current.bangla.length;
-    if(input.selectionStart!==end||input.value.slice(current.start,end)!==current.bangla){
-      activeWord.delete(input);return null;
-    }
-    return current;
+  function pick(input,index){
+    const d=draftAtCaret(input);
+    const value=options[index];
+    if(!d||typeof value!=='string')return;
+    input.setRangeText(value,d.start,d.start+d.rendered.length,'end');
+    d.rendered=value;
+    d.selected=(value!==renderedWord(d.raw));
+    emit(input);
+    stopSuggestions();
+    input.focus({preventScroll:true});
   }
-  function handleBeforeInput(event){
+  function resetChoice(input){
+    const d=draftAtCaret(input);
+    if(!d)return;
+    input.setRangeText(renderedWord(d.raw),d.start,d.start+d.rendered.length,'end');
+    d.rendered=renderedWord(d.raw);
+    d.selected=false;
+    emit(input);
+    refresh(input);
+  }
+  function onBeforeInput(event){
     const input=event.target;
-    if(!input?.matches?.(selector)||enabled.get(input)===false||event.isComposing||!event.cancelable||emitting)return;
-    attach(input);
+    if(!input?.matches?.(selector)||emitting||event.isComposing||!event.cancelable)return;
+    setup(input);
+    const s=state.get(input);
+    if(!s.enabled||s.composing)return;
     const start=input.selectionStart,end=input.selectionEnd;
     if(start===null||end===null)return;
 
     if(event.inputType==='deleteContentBackward'){
-      const current=validWord(input);
-      if(!current||!current.raw.length)return;
+      const d=draftAtCaret(input);
+      if(!d)return;
       event.preventDefault();
-      renderPart(input,current.start,start,current.raw.slice(0,-1),true);
+      renderWord(input,d.start,end,d.raw.slice(0,-1));
       return;
     }
-
-    if(event.inputType==='insertText' && typeof event.data==='string'){
+    if(event.inputType==='insertText'&&typeof event.data==='string'){
       const data=event.data;
       if(/^[A-Za-z]+$/.test(data)){
-        const current=validWord(input);
-        const initial=current&&start===end?current.start:start;
-        const raw=(current&&start===end?current.raw:'')+data;
+        const d=start===end?draftAtCaret(input):null;
         event.preventDefault();
-        renderPart(input,initial,end,raw,true);
+        renderWord(input,d?d.start:start,end,(d?d.raw:'')+data);
         return;
       }
-      if(/[A-Za-z]/.test(data)&&data.length>1){
+      if(/[A-Za-z]/.test(data)){
         event.preventDefault();
-        renderPart(input,start,end,data,false);
+        input.setRangeText(convertText(data),start,end,'end');
+        finishWord(input);
+        emit(input);
         return;
       }
+      // A space or punctuation commits the current word unchanged.
+      finishWord(input);
+      return;
     }
-    // On space, punctuation or cursor editing, finish the current word.
-    activeWord.delete(input);
-    closeSuggestions();
+    if(event.inputType.startsWith('delete')||event.inputType.startsWith('insert'))finishWord(input);
   }
-  function handlePaste(event){
+  function onPaste(event){
     const input=event.target;
-    if(!input?.matches?.(selector)||enabled.get(input)===false)return;
-    const text=event.clipboardData?.getData('text/plain');
-    if(!text||!/[A-Za-z]/.test(text))return;
+    if(!input?.matches?.(selector))return;
+    setup(input);
+    if(!state.get(input).enabled)return;
+    const pasted=event.clipboardData?.getData('text/plain');
+    if(!pasted||!/[A-Za-z]/.test(pasted))return;
     const start=input.selectionStart,end=input.selectionEnd;
     if(start===null||end===null)return;
     event.preventDefault();
-    renderPart(input,start,end,text,false);
+    input.setRangeText(convertText(pasted),start,end,'end');
+    finishWord(input);
+    emit(input);
   }
-  function handleNativeInput(event){
+  function onNativeInput(event){
     const input=event.target;
-    if(!input?.matches?.(selector)||enabled.get(input)===false||event.isComposing||emitting||!event.isTrusted)return;
-    // Fallback for mobile keyboards that emit non-cancellable beforeinput.
-    const caret=input.selectionStart;
-    if(caret===null||caret!==input.selectionEnd)return;
-    const before=input.value.slice(0,caret);
-    const match=/[A-Za-z]+$/.exec(before);
+    if(!input?.matches?.(selector)||emitting||event.isComposing||!event.isTrusted)return;
+    setup(input);
+    const s=state.get(input);
+    if(!s.enabled||s.composing||input.selectionStart!==input.selectionEnd)return;
+    const end=input.selectionStart;
+    if(end===null)return;
+    const match=/[A-Za-z]+$/.exec(input.value.slice(0,end));
     if(!match)return;
-    const current=activeWord.get(input);
-    let raw=match[0],start=caret-raw.length,end=caret;
-    if(current&&current.start+current.bangla.length===start){
-      raw=current.raw+raw;
-      start=current.start;
+    const tail=match[0],d=s.draft;
+    let start=end-tail.length,raw=tail;
+    if(d&&d.start+d.rendered.length===start&&
+       input.value.slice(d.start,start)===d.rendered){
+      start=d.start;raw=d.raw+tail;
     }
-    renderPart(input,start,end,raw,true);
+    renderWord(input,start,end,raw);
   }
-  function addToggle(input){
-    if(input.dataset.phoneticSwitch)return;
-    input.dataset.phoneticSwitch='1';
-    const button=document.createElement('button');
-    button.type='button';
-    button.className='amanah-name-mode';
-    button.setAttribute('aria-pressed','true');
-    button.textContent='বাংলা টাইপিং: চালু';
-    button.title='ইংরেজি অক্ষর লিখলে স্বয়ংক্রিয়ভাবে বাংলা হবে। বন্ধ করলে ইংরেজি সরাসরি লেখা যাবে।';
-    button.addEventListener('click',()=>{
-      const on=enabled.get(input)!==false;
-      enabled.set(input,!on);
-      activeWord.delete(input);
-      closeSuggestions();
-      button.setAttribute('aria-pressed',String(!on));
-      button.textContent=!on?'বাংলা টাইপিং: চালু':'বাংলা টাইপিং: বন্ধ';
+  function onKeydown(event){
+    const input=event.target;
+    if(!input?.matches?.(selector)||popup.hidden||!draftAtCaret(input))return;
+    // Same optional selection as the attached HTML: arrows only highlight;
+    // Enter, Numpad1..4 or click explicitly pick a suggestion; Numpad0 resets.
+    if(/^Numpad[1-4]$/.test(event.code)){
+      const i=Number(event.code.slice(-1));
+      if(i<options.length){event.preventDefault();pick(input,i)}
+      return;
+    }
+    if(event.code==='Numpad0'){
+      event.preventDefault();resetChoice(input);return;
+    }
+    if(event.key==='ArrowRight'||event.key==='ArrowDown'){
+      event.preventDefault();setHighlight(highlighted+1);
+    }else if(event.key==='ArrowLeft'||event.key==='ArrowUp'){
+      event.preventDefault();setHighlight(highlighted-1);
+    }else if(event.key==='Enter'&&highlighted>=0){
+      event.preventDefault();pick(input,highlighted+1);
+    }else if(event.key==='Escape'){
+      event.preventDefault();stopSuggestions();
+    }else if(event.key==='Tab'||event.key==='Home'||event.key==='End'){
+      finishWord(input);
+    }
+  }
+  function setup(input){
+    if(wired.has(input))return;
+    wired.add(input);
+    const s={enabled:true,draft:null,composing:false};
+    state.set(input,s);
+    input.setAttribute('autocomplete','off');
+    input.setAttribute('aria-autocomplete','list');
+    input.setAttribute('aria-controls',popup.id);
+    input.setAttribute('aria-expanded','false');
+    const toggle=document.createElement('button');
+    toggle.type='button';
+    toggle.className='amanah-name-mode';
+    toggle.setAttribute('aria-pressed','true');
+    toggle.textContent='বাংলা টাইপিং: চালু';
+    toggle.addEventListener('click',()=>{
+      finishWord(input);
+      s.enabled=!s.enabled;
+      toggle.setAttribute('aria-pressed',String(s.enabled));
+      toggle.textContent=s.enabled?'বাংলা টাইপিং: চালু':'বাংলা টাইপিং: বন্ধ';
       input.focus({preventScroll:true});
     });
-    input.insertAdjacentElement('afterend',button);
-  }
-  function attach(input){
-    if(attached.has(input))return;
-    attached.add(input);
-    enabled.set(input,true);
-    addToggle(input);
-    input.addEventListener('compositionstart',()=>activeWord.delete(input));
+    input.insertAdjacentElement('afterend',toggle);
+    input.addEventListener('compositionstart',()=>{s.composing=true;finishWord(input)});
     input.addEventListener('compositionend',()=>{
-      const caret=input.selectionStart;
-      if(caret!==null&&input.selectionEnd===caret){
-        const match=/[A-Za-z]+$/.exec(input.value.slice(0,caret));
-        if(match&&enabled.get(input)!==false){
-          renderPart(input,caret-match[0].length,caret,match[0],true);
-        }
+      s.composing=false;
+      if(!s.enabled)return;
+      const end=input.selectionStart;
+      if(end!==null&&end===input.selectionEnd){
+        const m=/[A-Za-z]+$/.exec(input.value.slice(0,end));
+        if(m)renderWord(input,end-m[0].length,end,m[0]);
       }
     });
-    input.addEventListener('blur',()=>{activeWord.delete(input);closeSuggestions()});
-    input.setAttribute('aria-autocomplete','list');
-    input.setAttribute('aria-controls',list.id);
-    input.setAttribute('aria-expanded','false');
+    input.addEventListener('blur',()=>finishWord(input));
   }
-  document.addEventListener('focusin',e=>{
-    const input=e.target;
-    if(input?.matches?.(selector))attach(input);
+  document.addEventListener('focusin',event=>{
+    if(event.target?.matches?.(selector)){setup(event.target);owner=event.target}
+    else if(!popup.contains(event.target))stopSuggestions();
   });
-  document.addEventListener('beforeinput',handleBeforeInput,true);
-  document.addEventListener('paste',handlePaste,true);
-  document.addEventListener('keydown',event=>{
-    if(!event.target?.matches?.(selector)||list.hidden||!renderedSuggestions.length)return;
-    if(event.key==='ArrowDown'||event.key==='ArrowUp'){
-      event.preventDefault();updateSelected(selectedSuggestion+(event.key==='ArrowDown'?1:-1));
-    }else if(event.key==='Enter'){
-      event.preventDefault();selectSuggestion(selectedSuggestion);
-    }else if(event.key==='Escape'){
-      event.preventDefault();closeSuggestions();
-    }else if(event.key==='Tab'||event.key==='ArrowLeft'||event.key==='ArrowRight'){
-      closeSuggestions();
-    }
-  },true);
-  document.addEventListener('scroll',()=>{if(!list.hidden)locateSuggestions()},true);
-  window.addEventListener('resize',()=>{if(!list.hidden)locateSuggestions()});
-  document.addEventListener('input',handleNativeInput);
-  window.AmanahNamePhonetic=Object.freeze({transliterate:transliterateText,transliterateWord,suggestionsFor,conv});
+  document.addEventListener('beforeinput',onBeforeInput,true);
+  document.addEventListener('paste',onPaste,true);
+  document.addEventListener('input',onNativeInput);
+  document.addEventListener('keydown',onKeydown,true);
+  document.addEventListener('scroll',()=>{if(!popup.hidden)position()},true);
+  window.addEventListener('resize',()=>{if(!popup.hidden)position()});
+  window.AmanahNamePhonetic=Object.freeze({conv,suggest,grammarAutoFix,renderedWord,convertText});
 })();
-

@@ -30,3 +30,13 @@
 }
 .amanah-name-suggestion:hover{background:var(--sky,#edf6fa)}
 .amanah-name-suggestion:focus-visible{outline:2px solid var(--navy2,#2f72ab);outline-offset:2px}
+
+/* Match the source HTML: current exact conversion is the green item;
+   the remaining Bengali suggestions stay optional. */
+.amanah-name-suggestion.current{
+  background:#0f9d58;color:#fff;border-color:#0f9d58;
+}
+.amanah-name-suggestion.highlight{
+  outline:2px solid #0f9d58;outline-offset:-2px;
+  background:#fff4dc;color:#1b1b1b;
+}
