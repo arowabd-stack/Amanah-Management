@@ -1,3 +1,4 @@
+// Browser-only checks with in-memory fixtures; no production clinic requests.
 const {chromium}=require('playwright');
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const root=path.resolve(__dirname,'..');
@@ -21,4 +22,38 @@ await c.route('**/*',async route=>{
  }
  let file=path.join(root,'public',url.pathname==='/'?'index.html':url.pathname.slice(1));
  if(fs.existsSync(file)&&fs.statSync(file).isDirectory())file=path.join(file,'index.html');
- if(!fs.existsSync(file))return route.fulfill({status:404,body:'¶»§q«^
+ if(!fs.existsSync(file))return route.fulfill({status:404,body:'missing '+file});
+ return route.fulfill({body:fs.readFileSync(file),contentType:file.endsWith('.js')?'application/javascript':file.endsWith('.css')?'text/css':file.endsWith('.woff2')?'font/woff2':'text/html'});
+});
+let passed=0;
+for(const [url,expected] of [['/','dash'],['/dashboard/','dash'],['/patients/','patients'],['/patient/?id=p1','patient'],['/new-visit/','new'],['/appointments/','appts'],['/accounts/','money'],['/settings/','settings']]){
+ await p.goto('https://qa.amanah.test'+url);
+ await p.waitForFunction(()=>document.getElementById('shell')&&!document.getElementById('shell').hidden);
+ assert.equal(await p.evaluate(()=>route),expected,'direct route '+url);
+ assert.ok(await p.locator('#main').innerText(),'Page main '+url);
+ console.log('PAGE OK '+url);passed++;
+}
+await p.locator('#nav a[data-r="patients"]').click();
+assert.equal(new URL(p.url()).pathname,'/patients/');
+await p.goBack();
+assert.equal(new URL(p.url()).pathname,'/settings/');
+console.log('NAVIGATION AND HISTORY OK');passed++;
+await p.goto('https://qa.amanah.test/new-visit/');
+await p.locator('#wizardSteps [data-step="5"]').click();
+assert.equal(await p.evaluate(()=>W.step),5);
+await p.locator('#wnext').click();
+assert.equal(await p.evaluate(()=>W.step),0);
+assert.equal(await p.locator('#wbody .wizard-required-alert').count(),1);
+await p.locator('#w_name').fill('QA test visitor');
+await p.locator('#w_mob').fill('01712345678');
+await p.locator('#wizardSteps [data-step="5"]').click();
+await p.locator('#wnext').click();
+assert.equal(await p.evaluate(()=>W._allowBlank),true);
+assert.ok(await p.locator('#wizardSteps .needs-attention').count()>0);
+assert.ok(await p.locator('#wnext').innerText().then(t=>t.includes('à¦«à¦¾à¦à¦•à¦¾')));
+console.log('WIZARD FIELDS / WARNINGS OK');passed++;
+assert.equal(writes.length,0,'No clinic writes during QA');
+assert.deepEqual(errs,[],'browser page errors');
+console.log('ALL '+passed+' PAGE/WIZARD CHECKS PASSED');
+await browser.close();
+})().catch(e=>{console.error(e);process.exitCode=1;});

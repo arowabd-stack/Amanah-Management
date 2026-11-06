@@ -1,13 +1,21 @@
-# Amanah Center — Modular Patient Management
+# Amanah Center — Modular Clinic
 
-This site provides eight HTML entry points (root plus seven screens), nine ordered shared JavaScript files, CSS and local WOFF2 fonts. It is still a static Vercel app with its original cloud sync and security.
+Standalone HTML entry points: `/`, `/dashboard/`, `/patients/`, `/patient/?id=<patient-id>`, `/new-visit/`, `/appointments/`, `/accounts/`, `/settings/`.
 
-Source pages: src/pages/index.html, src/pages/dashboard/index.html, src/pages/patients/index.html, src/pages/patient/index.html, src/pages/new-visit/index.html, src/pages/appointments/index.html, src/pages/accounts/index.html, src/pages/settings/index.html.
+## Sources
 
-All screens use shared files in src/scripts/core.js, src/scripts/pages/, src/scripts/ui.js and src/styles/app.css. Web fonts live in src/assets/fonts/. The original API, pricing, cloud sync and readability files remain unchanged.
+- `src/pages/**/index.html`: independent HTML page entry points with shared shell.
+- `src/scripts/core.js`: clinic state, utilities, URL navigation and shared UI.
+- `src/scripts/pages/*.js`: dashboard, patient records, visit wizard, print, appointments, accounts and settings.
+- `src/scripts/ui.js`: modal helpers and fail-closed login fallback.
+- `src/styles/app.css`: shared responsive styles with original embedded WOFF2 font assets.
+- `public/cloud.js`, `public/pricing.js`, `public/readability.css`: existing cloud authentication/sync, pricing and readability enhancements.
+- `api/`, `lib/`: existing cloud backend and access control.
 
-To build: npm ci && npm run build. The build outputs all page entry points and shared assets to public/. Direct page links and browser back/forward are supported.
+## Build
 
-The clinic data key remains amanah_clinic_clean_v2. The cloud client continues to handle sign-in and server data. No patient records are changed at build time.
+`npm ci && npm run build` emits all HTML entry points, JS assets and styles into `public/` for Vercel. Script order is preserved for existing classic-script globals. `public/index.html` is generated, not edited.
 
-Run npm run test:reminders for existing appointment regression tests. Do not use real patient data during tests.
+`npm run test:reminders` runs isolated appointment regression checks. `node tests/modular.cjs` tests all entry points, browser navigation, patient wizard fields and warnings against synthetic in-memory records.
+
+Existing production data remains under the isolated `amanah_clinic_clean_v2` namespace. Cloud login and storage remain unchanged; this refactor does not migrate or modify patient records. The original single-file HTML is kept as a legacy reference, not used in the build.
