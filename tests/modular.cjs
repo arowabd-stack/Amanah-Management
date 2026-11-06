@@ -16,6 +16,10 @@ await c.route('**/*',async route=>{
  const req=route.request(),url=new URL(req.url());
  if(url.origin!=='https://qa.amanah.test')return route.fulfill({status:200,body:'',contentType:'text/plain'});
  if(url.pathname==='/api/session')return route.fulfill({json:{authenticated:true}});
+ if(url.pathname==='/api/hijri'){
+  const p=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Dhaka',day:'2-digit',month:'2-digit',year:'numeric'}).formatToParts(new Date()).map(x=>[x.type,x.value]));
+  return route.fulfill({json:{ok:true,source:'iHadis',sourceUrl:'https://ihadis.com/en/calendar/bangladesh/islamic-date-today',date:p.year+'-'+p.month+'-'+p.day,hijri:{day:25,month:5,year:1448,monthName:'Jumada al-Ula'}}});
+ }
  if(url.pathname==='/api/clinic'){
   if(req.method()==='PUT'){writes.push(req.postDataJSON());return route.fulfill({json:{ok:true,revision:'qa-2'}})}
   return route.fulfill({json:{state:fixture,revision:'qa-1'}});
@@ -30,6 +34,14 @@ for(const [url,expected] of [['/','dash'],['/dashboard/','dash'],['/patients/','
  await p.goto('https://qa.amanah.test'+url);
  await p.waitForFunction(()=>document.getElementById('shell')&&!document.getElementById('shell').hidden);
  assert.equal(await p.evaluate(()=>route),expected,'direct route '+url);
+ if(url==='/dashboard/'){
+  await p.waitForFunction(()=>window.AmanahHijri?.status==='ready');
+  const synced=await p.evaluate(()=>hijri(window.AmanahHijri.date));
+  assert.equal(synced.day,25);
+  assert.equal(synced.verified,true);
+  assert.ok((await p.locator('#main').innerText()).includes('iHadis'));
+  console.log('SOURCE-VERIFIED HIJRI DISPLAY OK');
+ }
  assert.ok(await p.locator('#main').innerText(),'Page main '+url);
  console.log('PAGE OK '+url);passed++;
 }
