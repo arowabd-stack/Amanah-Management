@@ -8,6 +8,15 @@ function pSettings(m){
  <div class="card"><div class="h3">থেরাপিস্টের সাধারণ পরামর্শ</div><textarea id="adv_t" style="min-height:110px"></textarea><p class="muted" style="font-size:12.5px">প্রতিটি নতুন সাক্ষাতে এই লেখা আগে থেকে বসে থাকবে।</p><button class="btn pri sm" id="adv_s">সেভ</button></div>
  <div class="card"><div class="h3">WhatsApp রিমাইন্ডার মেসেজ</div><textarea id="wa_t" style="min-height:110px"></textarea><p class="muted" style="font-size:12.5px">{নাম}, {তারিখ}, {সময়} নিজে থেকে বসবে।</p><button class="btn pri sm" id="wa_s">সেভ</button></div>
  <div class="card"><div class="h3">সেন্টারের তথ্য (প্রিন্টে যাবে)</div><div class="fg"><div class="full"><label>নাম</label><input id="c_n"></div><div class="full"><label>ঠিকানা</label><input id="c_a"></div><div class="full"><label>ফোন</label><input id="c_p"></div></div><button class="btn pri sm mt" id="c_s">সেভ</button></div>
+ <div class="card"><div class="h3">হিজরি তারিখ সমন্বয়</div>
+  <div class="flex" style="align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0">
+   <button type="button" class="btn" id="hijri_minus" aria-label="হিজরি তারিখ এক দিন কমান">−১</button>
+   <strong id="hijri_offset_value" aria-live="polite" style="min-width:110px;text-align:center">০ দিন</strong>
+   <button type="button" class="btn" id="hijri_plus" aria-label="হিজরি তারিখ এক দিন বাড়ান">+১</button>
+   <button type="button" class="btn sm" id="hijri_reset">রিসেট</button>
+  </div>
+  <div id="hijri_date_preview" class="muted" style="font-size:14px"></div>
+  <p class="muted" style="font-size:12.5px">আগের চান্দ্র তারিখের হিসাব অনুযায়ী। প্রয়োজন হলে সর্বোচ্চ ২ দিন আগে বা পরে নিতে পারবেন। পরিবর্তন নিজে থেকে সেভ হবে।</p></div>
  <div class="card"><div class="h3">লগইন</div><div class="fg"><div><label>ইউজার নাম</label><input id="u_n"></div><div><label>নতুন পাসওয়ার্ড</label><input id="u_p" type="password"></div></div><button class="btn pri sm mt" id="u_s">পাসওয়ার্ড বদলান</button></div>
  <div class="card"><div class="h3">ডেটা ব্যাকআপ</div><p class="muted" style="font-size:13.5px;margin-top:0">সপ্তাহে অন্তত একবার Excel বা ব্যাকআপ ফাইল ডাউনলোড করে রাখুন।</p>
   <div class="flex"><button class="btn pri" id="x_xl">Excel ডাউনলোড</button><button class="btn" id="x_js">ব্যাকআপ ফাইল</button><label class="btn" style="margin:0;color:var(--ink);font-size:15px">ব্যাকআপ থেকে ফেরত<input type="file" id="x_in" accept=".json" hidden></label></div></div>
@@ -21,6 +30,30 @@ function pSettings(m){
   $('#sl').querySelectorAll('.sf').forEach(x=>x.onchange=()=>{S.services[x.dataset.i].fee=+en(x.value)||0;save();toast('সেভ হয়েছে')});
   $('#sl').querySelectorAll('button').forEach(x=>x.onclick=()=>{S.services.splice(+x.dataset.i,1);save();sl()})};
  tl();sl();
+ const currentHijriOffset=()=>{
+  const n=Number(S.hijriOffset??0);
+  return Number.isInteger(n)&&n>=-2&&n<=2?n:0;
+ };
+ const showHijriOffset=()=>{
+  const n=currentHijriOffset();
+  $('#hijri_offset_value').textContent=(n>0?'+':n<0?'−':'')+bn(Math.abs(n))+' দিন';
+  $('#hijri_minus').disabled=n<=-2;
+  $('#hijri_plus').disabled=n>=2;
+  $('#hijri_reset').disabled=n===0;
+  const h=hijri(today());
+  $('#hijri_date_preview').textContent='আজ: '+(h?bn(h.day)+' '+HM[h.month-1]:'তারিখ পাওয়া যাচ্ছে না');
+ };
+ const setHijriOffset=next=>{
+  const n=Math.max(-2,Math.min(2,Math.trunc(next)));
+  S.hijriOffset=n;
+  save();
+  showHijriOffset();
+  toast('হিজরি তারিখ সমন্বয় সেভ হয়েছে');
+ };
+ $('#hijri_minus').onclick=()=>setHijriOffset(currentHijriOffset()-1);
+ $('#hijri_plus').onclick=()=>setHijriOffset(currentHijriOffset()+1);
+ $('#hijri_reset').onclick=()=>setHijriOffset(0);
+ showHijriOffset();
  $('#addT').onclick=()=>{S.therapists.push({id:uid(),name:'নতুন থেরাপিস্ট',gender:'পুরুষ'});save();tl()};
  $('#addS').onclick=()=>{S.services.push({id:uid(),name:'নতুন সেবা',fee:0});save();sl()};
  $('#adv_t').value=S.defAdvice??'১–৩ দিন বিশ্রাম নিন, ভারী কাজ ও ব্যায়াম করবেন না। জায়গাটি পরিষ্কার ও শুকনো রাখুন, চুলকাবেন না। কুসুম গরম পানিতে গোসল করুন, প্রচুর পানি ও পুষ্টিকর খাবার খান।';$('#adv_s').onclick=()=>{S.defAdvice=$('#adv_t').value;save();toast('সেভ হয়েছে')};

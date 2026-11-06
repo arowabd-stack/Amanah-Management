@@ -10,7 +10,7 @@ const Store={
 const DEF={
  settings:{
   center:'আমানাহ সেন্টার',address:'পশ্চিম হাজীপাড়া মেইন রোড, সুনামগঞ্জ সদর',phone:'০১৬১৬-০৮৬৯৫২',
-  user:'admin',passHash:null,
+  user:'admin',passHash:null,hijriOffset:0,
   therapists:[{id:'t1',name:'পুরুষ থেরাপিস্ট',gender:'পুরুষ'},{id:'t2',name:'নারী থেরাপিস্ট',gender:'মহিলা'}],
   services:[{id:'s1',name:'ওয়েট কাপিং (সুন্নাহ হিজামা)',fee:1000},{id:'s2',name:'ড্রাই কাপিং',fee:600},{id:'s3',name:'মাথা ও ঘাড়ের হিজামা',fee:800}],
   defAdvice:'১–৩ দিন বিশ্রাম নিন, ভারী কাজ ও ব্যায়াম করবেন না। জায়গাটি পরিষ্কার ও শুকনো রাখুন, চুলকাবেন না। কুসুম গরম পানিতে গোসল করুন, প্রচুর পানি ও পুষ্টিকর খাবার খান।',
@@ -42,8 +42,18 @@ const tk=n=>'৳'+bn((+n||0).toLocaleString('en-IN'));
 const pById=id=>D.patients.find(p=>p.id===id);
 const thName=id=>(D.settings.therapists.find(t=>t.id===id)||{}).name||'';
 const svName=id=>(D.settings.services.find(s=>s.id===id)||{}).name||'';
-function hijri(dateStr){try{const d=new Date(dateStr+'T12:00');const f=new Intl.DateTimeFormat('en-u-ca-islamic-umalqura',{day:'numeric',month:'numeric'}).formatToParts(d);
- return {day:+f.find(x=>x.type==='day').value,month:+f.find(x=>x.type==='month').value}}catch(e){return null}}
+function hijri(dateStr){
+ try{
+  // Preserve the old Umm al-Qura calculation and apply the centre's optional adjustment.
+  const configured=Number(D?.settings?.hijriOffset??0);
+  const offset=Number.isInteger(configured)&&configured>=-2&&configured<=2?configured:0;
+  const d=new Date(dateStr+'T12:00');
+  if(Number.isNaN(d.getTime()))return null;
+  d.setDate(d.getDate()+offset);
+  const f=new Intl.DateTimeFormat('en-u-ca-islamic-umalqura',{day:'numeric',month:'numeric'}).formatToParts(d);
+  return {day:+f.find(x=>x.type==='day').value,month:+f.find(x=>x.type==='month').value};
+ }catch(e){return null}
+}
 const HM=['মুহাররম','সফর','রবিউল আউয়াল','রবিউস সানি','জমাদিউল আউয়াল','জমাদিউস সানি','রজব','শাবান','রমজান','শাওয়াল','জিলকদ','জিলহজ'];
 const isSunnah=s=>{const h=hijri(s);return h&&[17,19,21].includes(h.day)};
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('on'),1800)}

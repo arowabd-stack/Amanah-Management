@@ -4,13 +4,13 @@ function pAppts(m){
  const [y,mo]=calM.split('-').map(Number);const first=new Date(y,mo-1,1);const start=new Date(first);start.setDate(1-((first.getDay()+1)%7)); // শনিবার শুরু
  const days=[];for(let i=0;i<42;i++){const d=new Date(start);d.setDate(start.getDate()+i);d.setMinutes(d.getMinutes()-d.getTimezoneOffset());days.push(d.toISOString().slice(0,10))}
  const t=today();const sel=D.appts.filter(a=>a.date===calSel).sort((a,b)=>(a.time||'').localeCompare(b.time||''));const hs=hijri(calSel);
- m.innerHTML=`<div class="top"><div><h2>অ্যাপয়েন্টমেন্ট</h2><div class="sub">সোনালি ঘর = আনুমানিক সুন্নাহ দিন (চান্দ্র ১৭, ১৯, ২১)। আজকের তারিখ iHadis থেকে।</div></div><button class="btn pri" onclick="openAppt(null,null,calSel)">${I.plus}নতুন অ্যাপয়েন্টমেন্ট</button></div>
+ m.innerHTML=`<div class="top"><div><h2>অ্যাপয়েন্টমেন্ট</h2><div class="sub">সোনালি ঘর = সুন্নাহ দিন (চান্দ্র ১৭, ১৯, ২১); সেটিংসের সমন্বয় অনুযায়ী।</div></div><button class="btn pri" onclick="openAppt(null,null,calSel)">${I.plus}নতুন অ্যাপয়েন্টমেন্ট</button></div>
  <div class="grid" style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)" id="apg">
  <div class="card"><div class="h3"><button class="btn sm" id="cp">‹</button><span>${MON[mo-1]} ${bn(y)}</span><button class="btn sm" id="cn">›</button></div>
   <div class="cal">${['শনি','রবি','সোম','মঙ্গল','বুধ','বৃহঃ','শুক্র'].map(d=>`<div class="wd">${d}</div>`).join('')}
   ${days.map(d=>{const h=hijri(d);const sn=h&&[17,19,21].includes(h.day);const c=D.appts.filter(a=>a.date===d&&a.status!=='cancel').length;
    return `<div class="d ${d.slice(0,7)!==calM?'o':''} ${d===t?'today':''} ${d===calSel?'sel':''} ${sn?'sun':''}" data-d="${d}"><div class="dn"><span>${bn(+d.slice(8))}</span><span class="hj">${h?bn(h.day):''}</span></div>${sn?'<span class="sn">সুন্নাহ</span>':''}${c?`<span class="cnt">${bn(c)}</span>`:''}</div>`}).join('')}</div></div>
- <div class="card"><div class="h3">${fd(calSel)}</div><div class="muted" style="font-size:13px;margin:-6px 0 8px">${hs?bn(hs.day)+' '+HM[hs.month-1]+(hs.estimated?' (আনুমানিক)':' · iHadis'):''}${isSunnah(calSel)?' · <span class="pill gold">সুন্নাহ দিন</span>':''}</div>
+ <div class="card"><div class="h3">${fd(calSel)}</div><div class="muted" style="font-size:13px;margin:-6px 0 8px">${hs?bn(hs.day)+' '+HM[hs.month-1]:''}${isSunnah(calSel)?' · <span class="pill gold">সুন্নাহ দিন</span>':''}</div>
   <div class="list">${sel.length?sel.map(apptRow).join(''):'<div class="empty"><b>এই দিনে কোনো অ্যাপয়েন্টমেন্ট নেই</b><button class="btn sm pri mt" onclick="openAppt(null,null,calSel)">যোগ করুন</button></div>'}</div></div></div>`;
  if(innerWidth<860)$('#apg').style.gridTemplateColumns='1fr';
  $('#cp').onclick=()=>{const d=new Date(y,mo-2,1);calM=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');render()};
@@ -31,7 +31,7 @@ function openAppt(id,pid,date){
  <div id="ap_sun" class="muted" style="font-size:13px;margin-top:8px"></div>
  <div class="flex mt" style="justify-content:space-between">${id?`<button class="btn danger" id="ap_del">মুছুন</button>`:'<span></span>'}<div class="flex"><button class="btn" onclick="closeModal()">বাতিল</button><button class="btn pri" id="ap_ok">সেভ</button></div></div>`);
  const st={status:a.status};if(id)seg('ap_st',st,'status');
- const sun=()=>{const d=$('#ap_date').value;const h=hijri(d);$('#ap_sun').innerHTML=h?`চান্দ্র তারিখ: ${bn(h.day)} ${HM[h.month-1]}${h.estimated?' (আনুমানিক)':' · iHadis'}${isSunnah(d)?' · <span class="pill gold">সুন্নাহ দিন</span>':''}`:''};$('#ap_date').oninput=sun;sun();
+ const sun=()=>{const d=$('#ap_date').value;const h=hijri(d);$('#ap_sun').innerHTML=h?`চান্দ্র তারিখ: ${bn(h.day)} ${HM[h.month-1]}${isSunnah(d)?' · <span class="pill gold">সুন্নাহ দিন</span>':''}`:''};$('#ap_date').oninput=sun;sun();
  let linked=a.patientId;
  if(!p){const f=()=>{const m=en($('#ap_mob').value).replace(/\D/g,'');const x=m.length>=6?D.patients.find(q=>en(q.mobile).replace(/\D/g,'')===m):null;linked=x?x.id:null;$('#ap_found').innerHTML=x?`<div class="found">পুরনো রোগী: <b>${esc(x.name)}</b></div>`:'';if(x&&!$('#ap_name').value)$('#ap_name').value=x.name};$('#ap_mob').oninput=f;f()}
  $('#ap_ok').onclick=()=>{const o=Object.assign(a,{patientId:linked,name:p?'':$('#ap_name').value.trim(),mobile:p?'':$('#ap_mob').value.trim(),date:$('#ap_date').value,time:$('#ap_time').value,service:$('#ap_sv').value,therapist:$('#ap_th').value,note:$('#ap_note').value,status:st.status});

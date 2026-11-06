@@ -20,6 +20,8 @@ Standalone HTML entry points: `/`, `/dashboard/`, `/patients/`, `/patient/?id=<p
 
 Existing production data remains under the isolated `amanah_clinic_clean_v2` namespace. Cloud login and storage remain unchanged; this refactor does not migrate or modify patient records. The original single-file HTML is kept as a legacy reference, not used in the build.
 
-## Hijri calendar source
+## Hijri calendar
 
-Amanah's *current Bangladesh Hijri date* is fetched via `api/hijri.js` from [iHadis Bangladesh calendar](https://ihadis.com/en/calendar/bangladesh/islamic-date-today), validated against the Gregorian date in `Asia/Dhaka`, and refreshed on the client. Never substitute another site's date if iHadis is unavailable: current date is hidden with a source-unavailable indication. Future Sunnah dates are labelled estimates anchored to the last verified iHadis date, subject to local moon sighting. Run `node tests/hijri.cjs` for parser tests and `node tests/modular.cjs` for UI tests.
+The app uses its original browser-based Umm al-Qura Hijri calculation. Settings has an automatic-saving **Hijri date adjustment** from **−2 to +2 days** (default **0**). The adjustment is stored in clinic settings and affects the Dashboard, appointment calendar, Sunnah date highlights and appointment date labels. It does **not** change a patient's Gregorian appointment date.
+
+The former iHadis synchronizer `src/scripts/hijri-live.js` is now intentionally disabled and does not make network requests. The legacy `api/hijri.js` endpoint is unused by the app. Calculated Hijri dates can differ from local moon-sighting announcements; users can adjust the offset in Settings. Regression tests: `node tests/modular.cjs` and `npm run test:reminders`.

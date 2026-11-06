@@ -10,13 +10,13 @@ const fixture={
 (async()=>{
 const browser=await chromium.launch({headless:true});
 const c=await browser.newContext();
-const p=await c.newPage(),errs=[],writes=[];p.setDefaultTimeout(7000);
+const p=await c.newPage(),errs=[],writes=[];let hijriRequests=0;p.setDefaultTimeout(7000);
 p.on('pageerror',e=>errs.push(e.message));
 await c.route('**/*',async route=>{
  const req=route.request(),url=new URL(req.url());
  if(url.origin!=='https://qa.amanah.test')return route.fulfill({status:200,body:'',contentType:'text/plain'});
  if(url.pathname==='/api/session')return route.fulfill({json:{authenticated:true}});
- if(url.pathname==='/api/hijri'){
+ if(url.pathname==='/api/hijri'){hijriRequests++;
   const p=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Dhaka',day:'2-digit',month:'2-digit',year:'numeric'}).formatToParts(new Date()).map(x=>[x.type,x.value]));
   return route.fulfill({json:{ok:true,source:'iHadis',sourceUrl:'https://ihadis.com/en/calendar/bangladesh/islamic-date-today',date:p.year+'-'+p.month+'-'+p.day,hijri:{day:25,month:5,year:1448,monthName:'Jumada al-Ula'}}});
  }
@@ -34,17 +34,32 @@ for(const [url,expected] of [['/','dash'],['/dashboard/','dash'],['/patients/','
  await p.goto('https://qa.amanah.test'+url);
  await p.waitForFunction(()=>document.getElementById('shell')&&!document.getElementById('shell').hidden);
  assert.equal(await p.evaluate(()=>route),expected,'direct route '+url);
- if(url==='/dashboard/'){
-  await p.waitForFunction(()=>window.AmanahHijri?.status==='ready');
-  const synced=await p.evaluate(()=>hijri(window.AmanahHijri.date));
-  assert.equal(synced.day,25);
-  assert.equal(synced.verified,true);
-  assert.ok((await p.locator('#main').innerText()).includes('iHadis'));
-  console.log('SOURCE-VERIFIED HIJRI DISPLAY OK');
- }
+ if(url==='/dashboard/')assert.ok(!(await p.locator('#main').innerText()).includes('iHadis'));
  assert.ok(await p.locator('#main').innerText(),'Page main '+url);
  console.log('PAGE OK '+url);passed++;
 }
+await p.goto('https://qa.amanah.test/settings/');
+await p.waitForFunction(()=>document.getElementById('hijri_plus')?.offsetWidth>0);
+assert.equal(await p.evaluate(()=>D.settings.hijriOffset??0),0);
+assert.ok(await p.locator('#hijri_date_preview').innerText());
+await p.locator('#hijri_plus').click();
+assert.equal(await p.evaluate(()=>D.settings.hijriOffset),1);
+await p.locator('#hijri_plus').click();
+assert.equal(await p.evaluate(()=>D.settings.hijriOffset),2);
+assert.equal(await p.locator('#hijri_plus').isDisabled(),true);
+assert.equal(await p.evaluate(()=>{const d=new Date('2026-11-07T12:00');d.setDate(d.getDate()+2);const f=new Intl.DateTimeFormat('en-u-ca-islamic-umalqura',{day:'numeric',month:'numeric'}).formatToParts(d);const h=hijri('2026-11-07');return h.day===+f.find(x=>x.type==='day').value&&h.month===+f.find(x=>x.type==='month').value}),true);
+await p.locator('#hijri_minus').click();
+await p.locator('#hijri_minus').click();
+await p.locator('#hijri_minus').click();
+await p.locator('#hijri_minus').click();
+assert.equal(await p.evaluate(()=>D.settings.hijriOffset),-2);
+assert.equal(await p.locator('#hijri_minus').isDisabled(),true);
+await p.locator('#hijri_reset').click();
+assert.equal(await p.evaluate(()=>D.settings.hijriOffset),0);
+assert.equal(await p.locator('#hijri_reset').isDisabled(),true);
+assert.equal(hijriRequests,0,'Original calculator must not fetch iHadis');
+console.log('HIJRI -2..+2 SETTINGS, LIVE PREVIEW AND RESET OK');passed++;
+
 await p.locator('#nav a[data-r="patients"]').click();
 assert.equal(new URL(p.url()).pathname,'/patients/');
 await p.goBack();
@@ -104,7 +119,7 @@ assert.equal(await p.locator('#ep_addr').inputValue(),'মঙ্গলকাট�
 await p.evaluate(()=>closeModal());
 console.log('PATIENT EDIT ADDRESS SUGGESTIONS OK');passed++;
 
-assert.equal(writes.length,0,'No clinic writes during QA');
+assert.ok(writes.every(w=>Number.isInteger(w.state.settings.hijriOffset)&&Math.abs(w.state.settings.hijriOffset)<=2),'Only valid hijri offsets saved during QA');
 assert.deepEqual(errs,[],'browser page errors');
 console.log('ALL '+passed+' PAGE/WIZARD CHECKS PASSED');
 await browser.close();
