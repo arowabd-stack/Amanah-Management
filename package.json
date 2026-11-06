@@ -5,9 +5,13 @@
   "description": "Amanah clinic management with private encrypted cloud sync",
   "type": "commonjs",
   "scripts": {
-    "build": "node build.mjs"
+    "build": "node build.mjs",
+    "test:reminders": "node build.mjs && node tests/reminders.cjs"
   },
   "dependencies": {
     "@vercel/blob": "2.7.0"
+  },
+  "devDependencies": {
+    "playwright": "1.65.0"
   }
 }

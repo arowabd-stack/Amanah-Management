@@ -28,6 +28,7 @@ overlayStyle.textContent=[
 '#amanahNoticeActions button{cursor:pointer;border:1px solid #b8d6c3;border-radius:8px;background:#eaf5ec;color:#205d40;padding:8px 10px;font:700 12px/1.4 system-ui,sans-serif}',
 '#amanahNoticeLive{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}',
 '@media(max-width:700px){#amanahNoticeHub{top:max(9px,env(safe-area-inset-top));right:max(8px,env(safe-area-inset-right))}#amanahNoticeBell{width:42px;height:42px;border-radius:13px}#amanahNoticePanel{width:min(365px,calc(100vw - 16px));max-height:calc(100dvh - 135px)}}',
+'@media(max-width:860px){#main>.top{padding-right:54px;min-height:44px}}',
 '@media(min-width:861px){#amanahNoticeHub{position:relative;top:auto;right:auto;inset:auto;flex:0 0 auto}#amanahNoticePanel{right:auto;left:0}}',
 '#amanahNoticeList li.appointment{background:#f0f8f2;margin:4px 0;border:1px solid #d9e7dd;border-radius:12px;padding:0}',
 '#amanahNoticeList .appt-open{display:flex;gap:10px;align-items:flex-start;width:100%;padding:12px 9px;border:0;background:transparent;text-align:left;cursor:pointer;color:inherit;font:inherit;border-radius:12px}',
@@ -63,7 +64,7 @@ let appointmentReminders=[];
 const REMINDER_SEEN_KEY='amanah-reminder-seen-v1';
 const seenAppointmentKeys=new Set();
 try{const a=JSON.parse(localStorage.getItem(REMINDER_SEEN_KEY)||'[]');if(Array.isArray(a))for(const id of a.slice(-400))if(typeof id==='string'&&id.length<250)seenAppointmentKeys.add(id)}catch(e){}
-function rememberOpenedReminders(){for(const a of appointmentReminders)seenAppointmentKeys.add(a.key);try{localStorage.setItem(REMINDER_SEEN_KEY,JSON.stringify([...seenAppointmentKeys].slice(-400)))}catch(e){}}
+function rememberOpenedReminders(){let changed=false;for(const a of appointmentReminders)if(!seenAppointmentKeys.has(a.key)){seenAppointmentKeys.add(a.key);changed=true}if(changed)try{localStorage.setItem(REMINDER_SEEN_KEY,JSON.stringify([...seenAppointmentKeys].slice(-400)))}catch(e){}}
 function dhakaDateParts(value){const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value||''));if(!m)return null;const y=+m[1],mon=+m[2],day=+m[3];if(y<2020||y>2100||mon<1||mon>12||day<1||day>31)return null;const verify=new Date(Date.UTC(y,mon-1,day));if(verify.getUTCFullYear()!==y||verify.getUTCMonth()!==mon-1||verify.getUTCDate()!==day)return null;return {y,mon,day}}
 function appointmentReminderRange(appt,mode){
  const date=dhakaDateParts(appt?.date);if(!date)return null;
@@ -93,6 +94,8 @@ function refreshAppointmentReminders(){
  }
  next.sort((a,b)=>a.due-b.due);
  appointmentReminders=next.slice(0,100);
+ // A reminder that arrives in the visible panel has already been displayed to the user.
+ if(!panel.hidden&&!document.hidden)rememberOpenedReminders();
  drawNotices();
 }
 function openReminderAppointment(id){
@@ -144,6 +147,14 @@ function drawNotices(){
  count.hidden=!totalUnread&&!critical;
  count.textContent=totalUnread>0?(totalUnread>9?'9+':String(totalUnread)):'!';
  bell.setAttribute('aria-label',totalUnread?totalUnread+'টি নতুন নোটিফিকেশন দেখুন':critical?'জরুরি নোটিফিকেশন দেখুন':'নোটিফিকেশন খুলুন');
+ positionNoticePanel();
+}
+function positionNoticePanel(){
+ if(panel.hidden)return;
+ if(!bellDesktopMedia.matches){panel.style.left='';panel.style.right='';return;}
+ const anchor=hub.getBoundingClientRect();
+ const left=Math.max(10,Math.min(anchor.left,document.documentElement.clientWidth-panel.offsetWidth-10));
+ panel.style.left=(left-anchor.left)+'px';panel.style.right='auto';
 }
 function openNotices(open){
  panel.hidden=!open;bell.setAttribute('aria-expanded',String(open));
@@ -179,6 +190,7 @@ function placeNoticeBell(){
  if(!Cloud.ready)return;
  if(!bellDesktopMedia.matches){
   if(hub.parentElement!==document.body)document.body.appendChild(hub);
+  positionNoticePanel();
   return;
  }
  const header=document.querySelector('#main > .top');
@@ -189,6 +201,7 @@ function placeNoticeBell(){
    slot.insertBefore(hub,slot.firstChild);
   }
  }else if(hub.parentElement!==document.body)document.body.appendChild(hub);
+ positionNoticePanel();
 }
 const renderBeforeNoticeBell=render;
 render=function(...args){
@@ -201,6 +214,7 @@ render=function(...args){
 };
 if(typeof bellDesktopMedia.addEventListener==='function')bellDesktopMedia.addEventListener('change',placeNoticeBell);
 else if(typeof bellDesktopMedia.addListener==='function')bellDesktopMedia.addListener(placeNoticeBell);
+window.addEventListener('resize',positionNoticePanel);
 
 function countLocal(d){return (d?.patients?.length||0)+(d?.visits?.length||0)+(d?.appts?.length||0)}
 function saveBackup(d,filename){
